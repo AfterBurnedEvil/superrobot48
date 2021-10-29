@@ -1,0 +1,4879 @@
+
+
+#include <a_samp>
+#include <dini>
+#include <sscanf2>
+#include <zcmd>
+#include <YSI\y_ini>
+#include <streamer>
+#include <mSelection>
+#include <irc>
+#include <dprops>
+#include <vehcheck>
+#define dcmd(%1,%2,%3) if (!strcmp((%3)[1], #%1, true, (%2)) && ((((%3)[(%2) + 1] == '\0') && (dcmd_%1(playerid, ""))) || (((%3)[(%2) + 1] == ' ') && (dcmd_%1(playerid, (%3)[(%2) + 2]))))) return 1
+
+#define PRESSED(%0) \
+	(((newkeys & (%0)) == (%0)) && ((oldkeys & (%0)) != (%0)))
+	
+//STOP THESE
+stock Float:GetDistanceBetweenPlayers(p1,p2){
+        new Float:x1,Float:y1,Float:z1,Float:x3,Float:y3,Float:z3;
+        if (!IsPlayerConnected(p1) || !IsPlayerConnected(p2)){
+                return -1.00;
+        }
+        GetPlayerPos(p1,x1,y1,z1);
+        GetPlayerPos(p2,x3,y3,z3);
+        return floatsqroot(floatpower(floatabs(floatsub(x3,x1)),2)+floatpower(floatabs(floatsub(y3,y1)),2)+floatpower(floatabs(floatsub(z3,z1)),2));
+}
+
+main()
+{
+	print("\n----------------------------------");
+	print(" Super's cops and robbers loaded");
+	print("----------------------------------\n");
+}
+
+//new things
+new gTeam[MAX_PLAYERS];
+#define MAX_PLAYERS_ 35
+new car;
+new RHINO;
+new rhinopickup;
+new JailTime[MAX_PLAYERS];
+new AttemptedToBCRecently[MAX_PLAYERS];
+new BlewCarRecently[MAX_PLAYERS];
+new PlayerVirtualWorld[MAX_PLAYERS];
+new LastVehicle[MAX_PLAYERS];
+new HasbcRecently[MAX_PLAYERS];
+new Float:RandomSpawns[][] = {
+{1435.8024,2662.3647,11.3926,1.1650}, //  Northern train station
+{1457.4762,2773.4868,10.8203,272.2754}, //  Northern golf club
+{1739.6390,2803.0569,14.2735,285.3929}, //  Northern housing estate 1
+{1870.3096,2785.2471,14.2734,42.3102}, //  Northern housing estate 2
+{1959.7142,2754.6863,10.8203,181.4731}, //  Northern house 1
+{2314.2556,2759.4504,10.8203,93.2711}, //  Northern industrial estate 1
+{2216.5674,2715.0334,10.8130,267.6540}, //  Northern industrial estate 2
+{2101.4192,2678.7874,10.8130,92.0607}, //  Northern near railway line
+{1951.1090,2660.3877,10.8203,180.8461}, //  Northern house 2
+{1666.6949,2604.9861,10.8203,179.8495}, //  Northern house 3
+{2808.3367,2421.5107,11.0625,136.2060}, //  Northern shopping centre
+{2633.3203,2349.7061,10.6719,178.7175}, //  V-Rock
+{2606.6348,2161.7490,10.8203,88.7508}, //  South V-Rock
+{2616.5286,2100.6226,10.8158,177.7834}, //  North Ammunation 1
+{2491.8816,2397.9370,10.8203,266.6003}, //  North carpark 1
+{2531.7891,2530.3223,21.8750,91.6686}, //  North carpark 2
+{2340.6677,2530.4324,10.8203,177.8630}, //  North Pizza Stack
+{2097.6855,2491.3313,14.8390,181.8117}, //  Emerald Isle
+{1893.1000,2423.2412,11.1782,269.4385}, //  Souvenir shop
+{1698.9330,2241.8320,10.8203,357.8584}, //  Northern casino
+{1479.4559,2249.0769,11.0234,306.3790}, //  Baseball stadium 1
+{1298.1548,2083.4016,10.8127,256.7034}, //  Baseball stadium 2
+{1117.8785,2304.1514,10.8203,81.5490}, //  North carparks
+{1108.9878,1705.8639,10.8203,0.6785}, //  Dirtring racing 1
+{1423.9780,1034.4188,10.8203,90.9590}, //  Sumo
+{1537.4377,752.0641,11.0234,271.6893}, //  Church
+{1917.9590,702.6984,11.1328,359.2682}, //  Southern housing estate
+{2089.4785,658.0414,11.2707,357.3572}, //  Southern house 1
+{2489.8286,928.3251,10.8280,67.2245}, //  Wedding chapel
+{2697.4717,856.4916,9.8360,267.0983}, //  Southern construction site
+{2845.6104,1288.1444,11.3906,3.6506}, //  Southern train station
+{2437.9370,1293.1442,10.8203,86.3830}, //  Wedding chapel (near Pyramid)
+{2299.5430,1451.4177,10.8203,269.1287}, //  Carpark (near Pyramid)
+{2214.3008,2041.9165,10.8203,268.7626}, //  Central parking lot
+{2005.9174,2152.0835,10.8203,270.1372}, //  Central motel
+{2222.1042,1837.4220,10.8203,88.6461}, //  Clowns Pocket
+{2025.6753,1916.4363,12.3382,272.5852}, //  The Visage
+{2087.9902,1516.5336,10.8203,48.9300}, //  Royal Casino
+{2172.1624,1398.7496,11.0625,91.3783}, //  Auto Bahn
+{2139.1841,987.7975,10.8203,0.2315}, //  Come-a-lot
+{1860.9672,1030.2910,10.8203,271.6988}, //  Behind 4 Dragons
+{1673.2345,1316.1067,10.8203,177.7294}, //  Airport carpark
+{1412.6187,2000.0596,14.7396,271.3568} //  South baseball stadium houses
+};
+
+new Float:RandomCopSpawns[][] =
+{
+	{2294.5054,2451.6216,10.8203,86.3132},
+	{2251.6934,2488.1682,10.9908,74.5216},
+	{2238.6680,2449.3762,11.0372,94.4358}
+};
+
+new Float:RandomTaxiSpawns[][] =
+{
+	{2099.4834,1397.1406,10.8203,356.2153},
+	{2094.1831,1411.5778,10.8203,356.2153},
+	{2115.6721,1441.4862,10.8203,271.6146}
+};
+
+new Float:RandomArmySpawns[][] =
+{
+	{214.4670,1865.1903,13.1406,356.8421},
+	{214.2132,1901.8435,17.6406,356.8421},
+	{234.0198,1932.6245,33.8984,157.5603}
+};
+
+
+new Float:RandomJailSpawns[][] =
+{
+	{193.6737,175.3362,1003.0234,0.0677},
+	{197.6887,175.9284,1003.0234,351.5843},
+	{197.5266,173.6924,1003.0234,351.5843}
+};
+
+//Checkpoints
+new CP_SEXSHOP;
+new CP_tatoo;
+new CP_cbell;
+new CP_stackwell;
+new CP_virtualworld;
+new CP_zip;
+new CP_terro;
+new CP_sevenrob;
+new CP_CARSHOW;
+new CP_zone1;
+
+//GANG
+new zone1;
+new takingzone1[MAX_PLAYERS];
+//RANDOM
+new Text:randommsg;
+
+new RandomMessages[][] =
+{
+    "Want to get drunk? Go to the nearest Seven SHOP NOW!",
+    "You Know you can drive a tank with 500 $ / sec ?.",
+    "Go To Our website and take part with our admins. AT www.superrobot48.comze.com",
+    "Owner: ~g~Superrobot48, Co-owner : ~g~Umar",
+    "Buy cars!!!! From the car showroom!!"
+// You can define more messages, but make sure you have , everywhere, except at the last message
+};
+
+
+
+//robbery
+new ROBBING_SEXSHOP[MAX_PLAYERS];
+new ROBBING_TATOO[MAX_PLAYERS];
+new ROBBING_CBELL[MAX_PLAYERS];
+new ROBBING_STACKWELL[MAX_PLAYERS];
+new ROBBING_ZIP[MAX_PLAYERS];
+new ROBBING_SEVEN[MAX_PLAYERS];
+
+//SAFE
+new Pizzsafe;
+new Pizzclose;
+//DMS
+new IsBoxing[MAX_PLAYERS];
+new HasTaxiFare[MAX_PLAYERS] =-1;
+new IsFrozen[MAX_PLAYERS];
+
+//TDRAWS
+new Text:Servt;
+new Text:blackTD;                                //Server Time Text draw Variable
+new Tsec;                                         //stores the mins  of time
+new THrs;
+
+new Float:Degree[MAX_PLAYERS];
+const Float: Radius = 1.4; //do not edit this
+const Float: Speed  = 1.25; //do not edit this
+const Float: Height = 1.0; // do not edit this
+new Text:Textdraw2;
+new Float:lX[MAX_PLAYERS];
+new Float:lY[MAX_PLAYERS];
+new Float:lZ[MAX_PLAYERS];
+new hiden[MAX_PLAYERS];
+
+forward RandomMessage(); // This is the forward for the timer
+forward Weather();
+//Robbed recently
+new tatoorobbedrecently =0;
+new sexshoprobbedrecently =0;
+new cbellrobbedrecently =0;
+new stackwellrobbedrecently =0;
+new ziprobbedrecently =0;
+new sevenrobbedrecently =0;
+new zone11[MAX_PLAYERS];
+
+//SEX
+new HasRapedRecently[MAX_PLAYERS];
+//Seven
+new HasWine[MAX_PLAYERS];
+new HasCigar[MAX_PLAYERS];
+
+//TEXT dRAWS
+new Text:JailTimerr[MAX_PLAYERS];
+//
+new DRIVING_RHINO[MAX_PLAYERS];
+
+//TD
+new vehlist = mS_INVALID_LISTID;
+new skinlist = mS_INVALID_LISTID;
+new Seven = mS_INVALID_LISTID;
+//KIDNAP
+new IsKidnapped[MAX_PLAYERS];
+new HasKidnappedRecently[MAX_PLAYERS];
+new IsBlindfolded[MAX_PLAYERS];
+//army cars
+new armycar1;
+new armycar2;
+new armycar3;
+new armycar4;
+new armycar5;
+new armycar6;
+new armycar7;
+new armycar8;
+new armycar9;
+new armycar10;
+new armycar11;
+new armycar12;
+new armycar13;
+new armycar14;
+new armycar15;
+
+new taxicar1;
+new taxicar2;
+new taxicar3;
+new taxicar4;
+new taxicar5;
+new taxicar6;
+new taxicar7;
+new taxicar8;
+
+new ccar1;
+new ccar2;
+
+new PayingTaxi[MAX_PLAYERS];
+new OnDuty[MAX_PLAYERS];
+new SkillPrice[MAX_PLAYERS] =2000;
+//C4
+
+new C4OBJECT[MAX_PLAYERS];
+new C4PLANTED[MAX_PLAYERS];
+
+//BAR
+
+//DeFINES
+#define DISTANCE_BETWEEN_PLAYERS 5 //The minimum distance between players to be able to rob                     |
+#define COLOR_ROB 0x00FFFFFF //The color of the text send to the players when made a successfull rob             |
+#define COLOR_FAIL 0x00FFFFFF //Color of the text displayed to the players when a rob has failed                        |
+#define COLOR_ERROR 0xFF0000FF //Color of the text when there is an error
+#define ROB_TIME 7000 //Time between rob commands to prevent spam (in milliseconds)
+
+//Color
+#define COL_WHITE "{FFFFFF}"
+#define COL_RED "{F81414}"
+#define COL_GREEN "{00FF22}"
+#define COL_LIGHTBLUE "{00CED1}"
+#define COLOR_ORANGE 0xFFA500AA
+#define COLOR_LIGHTBLUE 0x33CCFFAA
+#define COLOR_DEEPGREEN 0x12900BBF
+//Colours
+#define GELB 								0xFF828200
+#define ROT 								0xFF0000FF
+#define GREEN 								0x00CC00FF
+#define WHITE 								0xFFFFFFFF
+#define COLOR_GREY 0xAFAFAFAA
+#define COLOR_GREEN 0x33AA33AA
+#define COLOR_RED 0xFF0000AA
+#define COLOR_YELLOW 0xFFFF00AA
+#define COLOR_WHITE 0xFFFFFFAA
+#define COLOR_VIOLETBLUE 0x8A2BE2AA
+#define COLOR_DEADCONNECT 0x808080AA
+#define COLOR_BLUE 0x0000FFAA
+#define COLOR_FORESTGREEN 0x228B22AA
+#define COLOR_DODGERBLUE 0x1E90FFAA
+#define COLOR_DARKOLIVEGREEN 0x556B2FAA
+#define COLOR_ORANGE 0xFFA500AA
+#define COLOR_PURPLE 0x800080AA
+#define COLOR_ROYALBLUE 0x4169FFAA
+#define COLOR_PINK 0xFF0080FF
+#define COLOR_SEXYGREEN 0x00FF00FF
+#define COLOR_LIME 0x10F441AA
+#define COLOR_ADMIN 0x10F441AA // Currently Lime.
+#define COLOR_CYAN 0x40FFFFFF
+#define COLOR_ORANGERED 0xFF4500AA
+
+//DEFINES
+//TEAMY
+#define TEAM_COP 1
+#define TEAM_CIVIL 2
+#define TEAM_ARMY 3
+#define TEAM_TERRO 4
+#define TEAM_KIDNAP 5
+#define TEAM_TAXI 6
+#define TEAM_RAPIST 7
+
+//:P:P:P:
+#define PATH "/Accounts/%s.ini"
+
+enum
+{
+DIALOG_REGISTER,
+DIALOG_LOGIN,
+DIALOG_SUCCESS_1,
+DIALOG_SUCCESS_2,
+DIALOG_CMDS_COP,
+DIALOG_CMDS_CIVIL,
+DIALOG_gcmds,
+DIALOG_robstackwell,
+DIALOG_COPSINFO,
+DIALOG_VIRTUALWORLD,
+DIALOG_VIRTUALWORLD_1,
+DIALOG_ZIP,
+DIALOG_RHINO,
+DIALOG_SKILLS,
+DIALOG_BOXING,
+DIALOG_SEVENROB,
+DIALOG_SEVENN,
+DIALOG_BACKPACK,
+DIALOG_TERRO,
+DIALOG_TSKILL,
+DIALOG_CARSHOW,
+DIALOG_GANGS
+}
+
+
+//FORWARDS
+forward robtimer(id);
+forward JailTimer();
+forward TaxiPay();
+forward ServerOneSecondVariables();
+forward PlayerOneSecondVariables();
+forward IncreaseWantedLevel(playerid,Value);
+forward SendClientMessageToAllCops(msg[]);
+forward SendClientMessageToAllDrivers(msg[]);
+forward TimeU();
+forward zone111(playerid);
+
+
+//enum
+enum pInfo
+{
+    pPass,
+    pCash,
+    AdminLevel,
+    pKills,
+    pDeaths,
+    pScore,
+    TSKILL,
+	RSKILL,
+    HasC4,
+    HasRope,
+    KSKILL,
+	Groove,
+	Traids,
+	Aztec
+}
+
+
+
+
+
+
+new Float:RandomBoxing[][] = {
+    {867.7291,2129.1277,11.4919},
+    {865.5221,2133.7498,11.4919}
+};
+new PlayerInfo[MAX_PLAYERS][pInfo];
+new IsCuffed[MAX_PLAYERS];
+new Anticuff[MAX_PLAYERS];
+new takingselfie[MAX_PLAYERS];
+//
+
+forward LoadUser_data(playerid,name[],value[]);
+public LoadUser_data(playerid,name[],value[])
+{
+    INI_Int("Password",PlayerInfo[playerid][pPass]);
+    INI_Int("Cash",PlayerInfo[playerid][pCash]);
+    INI_Int("Admin",PlayerInfo[playerid][AdminLevel]);
+    INI_Int("Kills",PlayerInfo[playerid][pKills]);
+    INI_Int("Deaths",PlayerInfo[playerid][pDeaths]);
+    INI_Int("Score",PlayerInfo[playerid][pScore]);
+    INI_Int("TSkill",PlayerInfo[playerid][TSKILL]);
+    INI_Int("C4s", PlayerInfo[playerid][HasC4]);
+    INI_Int("Ropes", PlayerInfo[playerid][HasRope]);
+    INI_Int("KidnapSkill",PlayerInfo[playerid][KSKILL]);
+    INI_Int("Groove",PlayerInfo[playerid][Groove]);
+    INI_Int("Traids",PlayerInfo[playerid][Traids]);
+    INI_Int("Aztec",PlayerInfo[playerid][Aztec]);
+    return 1;
+}
+
+
+//car
+enum vInfo
+{
+	bombed, // The vehicle's owner name. Remember string is a group of literal characters and the cells you provide should be the maximum length for that string.
+}
+
+new VehicleInfo[MAX_VEHICLES][vInfo];
+
+//ZONE
+new zoneupdates[MAX_PLAYERS_];
+new player_zone[MAX_PLAYERS_];
+new zoneupdate;
+new Text:LocationTD[MAX_PLAYERS];
+
+new boxinggpickup;
+new rocketpickup;
+
+enum zoneinfo {
+	zone_name[27],
+    Float:zone_minx,
+    Float:zone_miny,
+    Float:zone_minz,
+    Float:zone_maxx,
+    Float:zone_maxy,
+    Float:zone_maxz
+}
+forward update_zones();
+// Makabos zones script // ALWAYS ADD NEW ZONES TO THE END (YOULL MESS UP ALL ROBBERIES)
+new Float:zones[][zoneinfo] = {
+{ "Supa Save (Int)",             -11.0048,  -31.3442,  1003.5494,  8.3204,  -2.7050,  50.00},
+{ "Army Base",                   -1546.4114,  260.0058, 7.1797, -1222.0865, 521.8784, 50.00},
+{ "SFPD (Int)",                  214.0158,  107.4454, 999.0156, 278.4889,  127.9651,  50.00},
+{ "FBI HQ (Int)",                217.2494, 62.7068,  1001.0391,  270.0461,  92.4821,  50.00},
+{ "CIA HQ",                      -1336.4915, 705.7386, 6.6299, -1182.2593, 823.7599, 200.00},
+{ "CIA HQ (Int)",                188.1787, 138.6903, 1003.0234, 301.7826, 197.7743,   50.00},
+{ "The Big Ear",                -410.00,  1403.30,    -3.00,  -137.90,  1681.20,     200.00},
+{ "Aldea Malvada",               -1372.10,  2498.50,     0.00, -1277.50,  2615.30,   200.00},
+{ "Angel Pine",                  -2324.90, -2584.20,    -6.10, -1964.20, -2212.10,   200.00},
+{ "Arco del Oeste",               -901.10,  2221.80,     0.00,  -592.00,  2571.90,   200.00},
+{ "Avispa Country Club",         -2646.40,  -355.40,     0.00, -2270.00,  -222.50,   200.00},
+{ "Avispa Country Club",         -2831.80,  -430.20,    -6.10, -2646.40,  -222.50,   200.00},
+{ "Avispa Country Club",         -2361.50,  -417.10,     0.00, -2270.00,  -355.40,   200.00},
+{ "Avispa Country Club",         -2667.80,  -302.10,   -28.80, -2646.40,  -262.30,    71.10},
+{ "Avispa Country Club",         -2470.00,  -355.40,     0.00, -2270.00,  -318.40,    46.10},
+{ "Avispa Country Club",         -2550.00,  -355.40,     0.00, -2470.00,  -318.40,    39.70},
+{ "Back o Beyond",               -1166.90, -2641.10,     0.00,  -321.70, -1856.00,   200.00},
+{ "Battery Point",               -2741.00,  1268.40,    -4.50, -2533.00,  1490.40,   200.00},
+{ "Bayside",                     -2741.00,  2175.10,     0.00, -2353.10,  2722.70,   200.00},
+{ "Bayside Marina",              -2353.10,  2275.70,     0.00, -2153.10,  2475.70,   200.00},
+{ "Beacon Hill",                  -399.60, -1075.50,    -1.40,  -319.00,  -977.50,   198.50},
+{ "Blackfield",                    964.30,  1203.20,   -89.00,  1197.30,  1403.20,   110.90},
+{ "Blackfield",                    964.30,  1403.20,   -89.00,  1197.30,  1726.20,   110.90},
+{ "Blackfield Chapel",            1375.60,   596.30,   -89.00,  1558.00,   823.20,   110.90},
+{ "Blackfield Chapel",            1325.60,   596.30,   -89.00,  1375.60,   795.00,   110.90},
+{ "Blackfield Intersection",      1197.30,  1044.60,   -89.00,  1277.00,  1163.30,   110.90},
+{ "Blackfield Intersection",      1166.50,   795.00,   -89.00,  1375.60,  1044.60,   110.90},
+{ "Blackfield Intersection",      1277.00,  1044.60,   -89.00,  1315.30,  1087.60,   110.90},
+{ "Blackfield Intersection",      1375.60,   823.20,   -89.00,  1457.30,   919.40,   110.90},
+{ "Blueberry",                     104.50,  -220.10,     2.30,   349.60,   152.20,   200.00},
+{ "Blueberry",                      19.60,  -404.10,     3.80,   349.60,  -220.10,   200.00},
+{ "Blueberry Acres",              -319.60,  -220.10,     0.00,   104.50,   293.30,   200.00},
+{ "Calton Heights",              -2274.10,   744.10,    -6.10, -1982.30,  1358.90,   200.00},
+{ "Chinatown",                   -2274.10,   578.30,    -7.60, -2078.60,   744.10,   200.00},
+{ "Commerce",                     1323.90, -1842.20,   -89.00,  1701.90, -1722.20,   110.90},
+{ "Commerce",                     1323.90, -1722.20,   -89.00,  1440.90, -1577.50,   110.90},
+{ "Commerce",                     1370.80, -1577.50,   -89.00,  1463.90, -1384.90,   110.90},
+{ "Commerce",                     1463.90, -1577.50,   -89.00,  1667.90, -1430.80,   110.90},
+{ "Commerce",                     1583.50, -1722.20,   -89.00,  1758.90, -1577.50,   110.90},
+{ "Commerce",                     1667.90, -1577.50,   -89.00,  1812.60, -1430.80,   110.90},
+{ "Conference Center",            1046.10, -1804.20,   -89.00,  1323.90, -1722.20,   110.90},
+{ "Conference Center",            1073.20, -1842.20,   -89.00,  1323.90, -1804.20,   110.90},
+{ "Cranberry Station",           -2007.80,    56.30,     0.00, -1922.00,   224.70,   100.00},
+{ "Class Selection",           942.5793,  0.2095,  1000.9295, 947.4127,  4.8616,  1000.9299},
+{ "Creek",                        2749.90,  1937.20,   -89.00,  2921.60,  2669.70,   110.90},
+{ "Dillimore",                     580.70,  -674.80,    -9.50,   861.00,  -404.70,   200.00},
+{ "Doherty",                     -2270.00,  -324.10,    -0.00, -1794.90,  -222.50,   200.00},
+{ "Doherty",                     -2173.00,  -222.50,    -0.00, -1794.90,   265.20,   200.00},
+{ "Downtown",                    -1982.30,   744.10,    -6.10, -1871.70,  1274.20,   200.00},
+{ "Downtown",                    -1871.70,  1176.40,    -4.50, -1620.30,  1274.20,   200.00},
+{ "Downtown",                    -1700.00,   744.20,    -6.10, -1580.00,  1176.50,   200.00},
+{ "Downtown",                    -1580.00,   744.20,    -6.10, -1499.80,  1025.90,   200.00},
+{ "Downtown",                    -2078.60,   578.30,    -7.60, -1499.80,   744.20,   200.00},
+{ "Downtown",                    -1993.20,   265.20,    -9.10, -1794.90,   578.30,   200.00},
+{ "Downtown Los Santos",          1463.90, -1430.80,   -89.00,  1724.70, -1290.80,   110.90},
+{ "Downtown Los Santos",          1724.70, -1430.80,   -89.00,  1812.60, -1250.90,   110.90},
+{ "Downtown Los Santos",          1463.90, -1290.80,   -89.00,  1724.70, -1150.80,   110.90},
+{ "Downtown Los Santos",          1370.80, -1384.90,   -89.00,  1463.90, -1170.80,   110.90},
+{ "Downtown Los Santos",          1724.70, -1250.90,   -89.00,  1812.60, -1150.80,   110.90},
+{ "Downtown Los Santos",          1370.80, -1170.80,   -89.00,  1463.90, -1130.80,   110.90},
+{ "Downtown Los Santos",          1378.30, -1130.80,   -89.00,  1463.90, -1026.30,   110.90},
+{ "Downtown Los Santos",          1391.00, -1026.30,   -89.00,  1463.90,  -926.90,   110.90},
+{ "Downtown Los Santos",          1507.50, -1385.20,   110.90,  1582.50, -1325.30,   335.90},
+{ "East Beach",                   2632.80, -1852.80,   -89.00,  2959.30, -1668.10,   110.90},
+{ "East Beach",                   2632.80, -1668.10,   -89.00,  2747.70, -1393.40,   110.90},
+{ "East Beach",                   2747.70, -1668.10,   -89.00,  2959.30, -1498.60,   110.90},
+{ "East Beach",                   2747.70, -1498.60,   -89.00,  2959.30, -1120.00,   110.90},
+{ "East Los Santos",              2421.00, -1628.50,   -89.00,  2632.80, -1454.30,   110.90},
+{ "East Los Santos",              2222.50, -1628.50,   -89.00,  2421.00, -1494.00,   110.90},
+{ "East Los Santos",              2266.20, -1494.00,   -89.00,  2381.60, -1372.00,   110.90},
+{ "East Los Santos",              2381.60, -1494.00,   -89.00,  2421.00, -1454.30,   110.90},
+{ "East Los Santos",              2281.40, -1372.00,   -89.00,  2381.60, -1135.00,   110.90},
+{ "East Los Santos",              2381.60, -1454.30,   -89.00,  2462.10, -1135.00,   110.90},
+{ "East Los Santos",              2462.10, -1454.30,   -89.00,  2581.70, -1135.00,   110.90},
+{ "Easter Basin",                -1794.90,   249.90,    -9.10, -1242.90,   578.30,   200.00},
+{ "Easter Basin",                -1794.90,   -50.00,    -0.00, -1499.80,   249.90,   200.00},
+{ "Easter Bay Airport",          -1499.80,   -50.00,    -0.00, -1242.90,   249.90,   200.00},
+{ "Easter Bay Airport",          -1794.90,  -730.10,    -3.00, -1213.90,   -50.00,   200.00},
+{ "Easter Bay Airport",          -1213.90,  -730.10,     0.00, -1132.80,   -50.00,   200.00},
+{ "Easter Bay Airport",          -1242.90,   -50.00,     0.00, -1213.90,   578.30,   200.00},
+{ "Easter Bay Airport",          -1213.90,   -50.00,    -4.50,  -947.90,   578.30,   200.00},
+{ "Easter Bay Airport",          -1315.40,  -405.30,    15.40, -1264.40,  -209.50,    25.40},
+{ "Easter Bay Airport",          -1354.30,  -287.30,    15.40, -1315.40,  -209.50,    25.40},
+{ "Easter Bay Airport",          -1490.30,  -209.50,    15.40, -1264.40,  -148.30,    25.40},
+{ "Easter Bay Chemicals",        -1132.80,  -768.00,     0.00,  -956.40,  -578.10,   200.00},
+{ "Easter Bay Chemicals",        -1132.80,  -787.30,     0.00,  -956.40,  -768.00,   200.00},
+{ "El Castillo del Diablo",       -464.50,  2217.60,     0.00,  -208.50,  2580.30,   200.00},
+{ "El Castillo del Diablo",       -208.50,  2123.00,    -7.60,   114.00,  2337.10,   200.00},
+{ "El Castillo del Diablo",       -208.50,  2337.10,     0.00,     8.40,  2487.10,   200.00},
+{ "El Corona",                    1812.60, -2179.20,   -89.00,  1970.60, -1852.80,   110.90},
+{ "El Corona",                    1692.60, -2179.20,   -89.00,  1812.60, -1842.20,   110.90},
+{ "El Quebrados",                -1645.20,  2498.50,     0.00, -1372.10,  2777.80,   200.00},
+{ "Esplanade East",              -1620.30,  1176.50,    -4.50, -1580.00,  1274.20,   200.00},
+{ "Esplanade East",              -1580.00,  1025.90,    -6.10, -1499.80,  1274.20,   200.00},
+{ "Esplanade East",              -1499.80,   578.30,   -79.60, -1339.80,  1274.20,    20.30},
+{ "Esplanade North",             -2533.00,  1358.90,    -4.50, -1996.60,  1501.20,   200.00},
+{ "Esplanade North",             -1996.60,  1358.90,    -4.50, -1524.20,  1592.50,   200.00},
+{ "Esplanade North",             -1982.30,  1274.20,    -4.50, -1524.20,  1358.90,   200.00},
+{ "Fallen Tree",                  -792.20,  -698.50,    -5.30,  -452.40,  -380.00,   200.00},
+{ "Fallow Bridge",                 434.30,   366.50,     0.00,   603.00,   555.60,   200.00},
+{ "Fern Ridge",                    508.10,  -139.20,     0.00,  1306.60,   119.50,   200.00},
+{ "Financial",                   -1871.70,   744.10,    -6.10, -1701.30,  1176.40,   300.00},
+{ "Fisher's Lagoon",              1916.90,  -233.30,  -100.00,  2131.70,    13.80,   200.00},
+{ "Flint Intersection",           -187.70, -1596.70,   -89.00,    17.00, -1276.60,   110.90},
+{ "Flint Range",                  -594.10, -1648.50,     0.00,  -187.70, -1276.60,   200.00},
+{ "Fort Carson",                  -376.20,   826.30,    -3.00,   123.70,  1220.40,   200.00},
+{ "Foster Valley",               -2270.00,  -430.20,    -0.00, -2178.60,  -324.10,   200.00},
+{ "Foster Valley",               -2178.60,  -599.80,    -0.00, -1794.90,  -324.10,   200.00},
+{ "Foster Valley",               -2178.60, -1115.50,     0.00, -1794.90,  -599.80,   200.00},
+{ "Foster Valley",               -2178.60, -1250.90,     0.00, -1794.90, -1115.50,   200.00},
+{ "Frederick Bridge",             2759.20,   296.50,     0.00,  2774.20,   594.70,   200.00},
+{ "Gant Bridge",                 -2741.40,  1659.60,    -6.10, -2616.40,  2175.10,   200.00},
+{ "Gant Bridge",                 -2741.00,  1490.40,    -6.10, -2616.40,  1659.60,   200.00},
+{ "Ganton",                       2222.50, -1852.80,   -89.00,  2632.80, -1722.30,   110.90},
+{ "Ganton",                       2222.50, -1722.30,   -89.00,  2632.80, -1628.50,   110.90},
+{ "Garcia",                      -2411.20,  -222.50,    -0.00, -2173.00,   265.20,   200.00},
+{ "Garcia",                      -2395.10,  -222.50,    -5.30, -2354.00,  -204.70,   200.00},
+{ "Garver Bridge",               -1339.80,   828.10,   -89.00, -1213.90,  1057.00,   110.90},
+{ "Garver Bridge",               -1213.90,   950.00,   -89.00, -1087.90,  1178.90,   110.90},
+{ "Garver Bridge",               -1499.80,   696.40,  -179.60, -1339.80,   925.30,    20.30},
+{ "Glen Park",                    1812.60, -1449.60,   -89.00,  1996.90, -1350.70,   110.90},
+{ "Glen Park",                    1812.60, -1100.80,   -89.00,  1994.30,  -973.30,   110.90},
+{ "Glen Park",                    1812.60, -1350.70,   -89.00,  2056.80, -1100.80,   110.90},
+{ "Green Palms",                   176.50,  1305.40,    -3.00,   338.60,  1520.70,   200.00},
+{ "Greenglass College",            964.30,  1044.60,   -89.00,  1197.30,  1203.20,   110.90},
+{ "Greenglass College",            964.30,   930.80,   -89.00,  1166.50,  1044.60,   110.90},
+{ "Hampton Barns",                 603.00,   264.30,     0.00,   761.90,   366.50,   200.00},
+{ "Hankypanky Point",             2576.90,    62.10,     0.00,  2759.20,   385.50,   200.00},
+{ "Harry Gold Parkway",           1777.30,   863.20,   -89.00,  1817.30,  2342.80,   110.90},
+{ "Hashbury",                    -2593.40,  -222.50,    -0.00, -2411.20,    54.70,   200.00},
+{ "Hilltop Farm",                  967.30,  -450.30,    -3.00,  1176.70,  -217.90,   200.00},
+{ "Hunter Quarry",                 337.20,   710.80,  -115.20,   860.50,  1031.70,   203.70},
+{ "Idlewood",                     1812.60, -1852.80,   -89.00,  1971.60, -1742.30,   110.90},
+{ "Idlewood",                     1812.60, -1742.30,   -89.00,  1951.60, -1602.30,   110.90},
+{ "Idlewood",                     1951.60, -1742.30,   -89.00,  2124.60, -1602.30,   110.90},
+{ "Idlewood",                     1812.60, -1602.30,   -89.00,  2124.60, -1449.60,   110.90},
+{ "Idlewood",                     2124.60, -1742.30,   -89.00,  2222.50, -1494.00,   110.90},
+{ "Idlewood",                     1971.60, -1852.80,   -89.00,  2222.50, -1742.30,   110.90},
+{ "Jefferson",                    1996.90, -1449.60,   -89.00,  2056.80, -1350.70,   110.90},
+{ "Jefferson",                    2124.60, -1494.00,   -89.00,  2266.20, -1449.60,   110.90},
+{ "Jefferson",                    2056.80, -1372.00,   -89.00,  2281.40, -1210.70,   110.90},
+{ "Jefferson",                    2056.80, -1210.70,   -89.00,  2185.30, -1126.30,   110.90},
+{ "Jefferson",                    2185.30, -1210.70,   -89.00,  2281.40, -1154.50,   110.90},
+{ "Jefferson",                    2056.80, -1449.60,   -89.00,  2266.20, -1372.00,   110.90},
+{ "Julius Thruway East",          2623.10,   943.20,   -89.00,  2749.90,  1055.90,   110.90},
+{ "Julius Thruway East",          2685.10,  1055.90,   -89.00,  2749.90,  2626.50,   110.90},
+{ "Julius Thruway East",          2536.40,  2442.50,   -89.00,  2685.10,  2542.50,   110.90},
+{ "Julius Thruway East",          2625.10,  2202.70,   -89.00,  2685.10,  2442.50,   110.90},
+{ "Julius Thruway North",         2498.20,  2542.50,   -89.00,  2685.10,  2626.50,   110.90},
+{ "Julius Thruway North",         2237.40,  2542.50,   -89.00,  2498.20,  2663.10,   110.90},
+{ "Julius Thruway North",         2121.40,  2508.20,   -89.00,  2237.40,  2663.10,   110.90},
+{ "Julius Thruway North",         1938.80,  2508.20,   -89.00,  2121.40,  2624.20,   110.90},
+{ "Julius Thruway North",         1534.50,  2433.20,   -89.00,  1848.40,  2583.20,   110.90},
+{ "Julius Thruway North",         1848.40,  2478.40,   -89.00,  1938.80,  2553.40,   110.90},
+{ "Julius Thruway North",         1704.50,  2342.80,   -89.00,  1848.40,  2433.20,   110.90},
+{ "Julius Thruway North",         1377.30,  2433.20,   -89.00,  1534.50,  2507.20,   110.90},
+{ "Julius Thruway South",         1457.30,   823.20,   -89.00,  2377.30,   863.20,   110.90},
+{ "Julius Thruway South",         2377.30,   788.80,   -89.00,  2537.30,   897.90,   110.90},
+{ "Julius Thruway West",          1197.30,  1163.30,   -89.00,  1236.60,  2243.20,   110.90},
+{ "Julius Thruway West",          1236.60,  2142.80,   -89.00,  1297.40,  2243.20,   110.90},
+{ "Juniper Hill",                -2533.00,   578.30,    -7.60, -2274.10,   968.30,   200.00},
+{ "Juniper Hollow",              -2533.00,   968.30,    -6.10, -2274.10,  1358.90,   200.00},
+{ "K.A.C.C. Military Fuels",      2498.20,  2626.50,   -89.00,  2749.90,  2861.50,   110.90},
+{ "Kincaid Bridge",              -1339.80,   599.20,   -89.00, -1213.90,   828.10,   110.90},
+{ "Kincaid Bridge",              -1213.90,   721.10,   -89.00, -1087.90,   950.00,   110.90},
+{ "Kincaid Bridge",              -1087.90,   855.30,   -89.00,  -961.90,   986.20,   110.90},
+{ "King's",                      -2329.30,   458.40,    -7.60, -1993.20,   578.30,   200.00},
+{ "King's",                      -2411.20,   265.20,    -9.10, -1993.20,   373.50,   200.00},
+{ "King's",                      -2253.50,   373.50,    -9.10, -1993.20,   458.40,   200.00},
+{ "LVA Freight Depot",            1457.30,   863.20,   -89.00,  1777.40,  1143.20,   110.90},
+{ "LVA Freight Depot",            1375.60,   919.40,   -89.00,  1457.30,  1203.20,   110.90},
+{ "LVA Freight Depot",            1277.00,  1087.60,   -89.00,  1375.60,  1203.20,   110.90},
+{ "LVA Freight Depot",            1315.30,  1044.60,   -89.00,  1375.60,  1087.60,   110.90},
+{ "LVA Freight Depot",            1236.60,  1163.40,   -89.00,  1277.00,  1203.20,   110.90},
+{ "Las Barrancas",                -926.10,  1398.70,    -3.00,  -719.20,  1634.60,   200.00},
+{ "Las Brujas",                   -365.10,  2123.00,    -3.00,  -208.50,  2217.60,   200.00},
+{ "Las Colinas",                  1994.30, -1100.80,   -89.00,  2056.80,  -920.80,   110.90},
+{ "Las Colinas",                  2056.80, -1126.30,   -89.00,  2126.80,  -920.80,   110.90},
+{ "Las Colinas",                  2185.30, -1154.50,   -89.00,  2281.40,  -934.40,   110.90},
+{ "Las Colinas",                  2126.80, -1126.30,   -89.00,  2185.30,  -934.40,   110.90},
+{ "Las Colinas",                  2747.70, -1120.00,   -89.00,  2959.30,  -945.00,   110.90},
+{ "Las Colinas",                  2632.70, -1135.00,   -89.00,  2747.70,  -945.00,   110.90},
+{ "Las Colinas",                  2281.40, -1135.00,   -89.00,  2632.70,  -945.00,   110.90},
+{ "Las Payasadas",                -354.30,  2580.30,     2.00,  -133.60,  2816.80,   200.00},
+{ "Las Venturas Airport",         1236.60,  1203.20,   -89.00,  1457.30,  1883.10,   110.90},
+{ "Las Venturas Airport",         1457.30,  1203.20,   -89.00,  1777.30,  1883.10,   110.90},
+{ "Las Venturas Airport",         1457.30,  1143.20,   -89.00,  1777.40,  1203.20,   110.90},
+{ "Las Venturas Airport",         1515.80,  1586.40,   -12.50,  1729.90,  1714.50,    87.50},
+{ "Last Dime Motel",              1823.00,   596.30,   -89.00,  1997.20,   823.20,   110.90},
+{ "Leafy Hollow",                -1166.90, -1856.00,     0.00,  -815.60, -1602.00,   200.00},
+{ "Lil' Probe Inn",                -90.20,  1286.80,    -3.00,   153.80,  1554.10,   200.00},
+{ "Linden Side",                  2749.90,   943.20,   -89.00,  2923.30,  1198.90,   110.90},
+{ "Linden Station",               2749.90,  1198.90,   -89.00,  2923.30,  1548.90,   110.90},
+{ "Linden Station",               2811.20,  1229.50,   -39.50,  2861.20,  1407.50,    60.40},
+{ "Little Mexico",                1701.90, -1842.20,   -89.00,  1812.60, -1722.20,   110.90},
+{ "Little Mexico",                1758.90, -1722.20,   -89.00,  1812.60, -1577.50,   110.90},
+{ "Los Flores",                   2581.70, -1454.30,   -89.00,  2632.80, -1393.40,   110.90},
+{ "Los Flores",                   2581.70, -1393.40,   -89.00,  2747.70, -1135.00,   110.90},
+{ "Los Santos International",     1249.60, -2394.30,   -89.00,  1852.00, -2179.20,   110.90},
+{ "Los Santos International",     1852.00, -2394.30,   -89.00,  2089.00, -2179.20,   110.90},
+{ "Los Santos International",     1382.70, -2730.80,   -89.00,  2201.80, -2394.30,   110.90},
+{ "Los Santos International",     1974.60, -2394.30,   -39.00,  2089.00, -2256.50,    60.90},
+{ "Los Santos International",     1400.90, -2669.20,   -39.00,  2189.80, -2597.20,    60.90},
+{ "Los Santos International",     2051.60, -2597.20,   -39.00,  2152.40, -2394.30,    60.90},
+{ "Marina",                        647.70, -1804.20,   -89.00,   851.40, -1577.50,   110.90},
+{ "Marina",                        647.70, -1577.50,   -89.00,   807.90, -1416.20,   110.90},
+{ "Marina",                        807.90, -1577.50,   -89.00,   926.90, -1416.20,   110.90},
+{ "Market",                        787.40, -1416.20,   -89.00,  1072.60, -1310.20,   110.90},
+{ "Market",                        952.60, -1310.20,   -89.00,  1072.60, -1130.80,   110.90},
+{ "Market",                       1072.60, -1416.20,   -89.00,  1370.80, -1130.80,   110.90},
+{ "Market",                        926.90, -1577.50,   -89.00,  1370.80, -1416.20,   110.90},
+{ "Market Station",                787.40, -1410.90,   -34.10,   866.00, -1310.20,    65.80},
+{ "Martin Bridge",                -222.10,   293.30,     0.00,  -122.10,   476.40,   200.00},
+{ "Missionary Hill",             -2994.40,  -811.20,     0.00, -2178.60,  -430.20,   200.00},
+{ "Montgomery",                   1119.50,   119.50,    -3.00,  1451.40,   493.30,   200.00},
+{ "Montgomery",                   1451.40,   347.40,    -6.10,  1582.40,   420.80,   200.00},
+{ "Montgomery Intersection",      1546.60,   208.10,     0.00,  1745.80,   347.40,   200.00},
+{ "Montgomery Intersection",      1582.40,   347.40,     0.00,  1664.60,   401.70,   200.00},
+{ "Mulholland",                   1414.00,  -768.00,   -89.00,  1667.60,  -452.40,   110.90},
+{ "Mulholland",                   1281.10,  -452.40,   -89.00,  1641.10,  -290.90,   110.90},
+{ "Mulholland",                   1269.10,  -768.00,   -89.00,  1414.00,  -452.40,   110.90},
+{ "Mulholland",                   1357.00,  -926.90,   -89.00,  1463.90,  -768.00,   110.90},
+{ "Mulholland",                   1318.10,  -910.10,   -89.00,  1357.00,  -768.00,   110.90},
+{ "Mulholland",                   1169.10,  -910.10,   -89.00,  1318.10,  -768.00,   110.90},
+{ "Mulholland",                    768.60,  -954.60,   -89.00,   952.60,  -860.60,   110.90},
+{ "Mulholland",                    687.80,  -860.60,   -89.00,   911.80,  -768.00,   110.90},
+{ "Mulholland",                    737.50,  -768.00,   -89.00,  1142.20,  -674.80,   110.90},
+{ "Mulholland",                   1096.40,  -910.10,   -89.00,  1169.10,  -768.00,   110.90},
+{ "Mulholland",                    952.60,  -937.10,   -89.00,  1096.40,  -860.60,   110.90},
+{ "Mulholland",                    911.80,  -860.60,   -89.00,  1096.40,  -768.00,   110.90},
+{ "Mulholland",                    861.00,  -674.80,   -89.00,  1156.50,  -600.80,   110.90},
+{ "Mulholland Intersection",      1463.90, -1150.80,   -89.00,  1812.60,  -768.00,   110.90},
+{ "North Rock",                   2285.30,  -768.00,     0.00,  2770.50,  -269.70,   200.00},
+{ "Ocean Docks",                  2373.70, -2697.00,   -89.00,  2809.20, -2330.40,   110.90},
+{ "Ocean Docks",                  2201.80, -2418.30,   -89.00,  2324.00, -2095.00,   110.90},
+{ "Ocean Docks",                  2324.00, -2302.30,   -89.00,  2703.50, -2145.10,   110.90},
+{ "Ocean Docks",                  2089.00, -2394.30,   -89.00,  2201.80, -2235.80,   110.90},
+{ "Ocean Docks",                  2201.80, -2730.80,   -89.00,  2324.00, -2418.30,   110.90},
+{ "Ocean Docks",                  2703.50, -2302.30,   -89.00,  2959.30, -2126.90,   110.90},
+{ "Ocean Docks",                  2324.00, -2145.10,   -89.00,  2703.50, -2059.20,   110.90},
+{ "Ocean Flats",                 -2994.40,   277.40,    -9.10, -2867.80,   458.40,   200.00},
+{ "Ocean Flats",                 -2994.40,  -222.50,    -0.00, -2593.40,   277.40,   200.00},
+{ "Ocean Flats",                 -2994.40,  -430.20,    -0.00, -2831.80,  -222.50,   200.00},
+{ "Octane Springs",                338.60,  1228.50,     0.00,   664.30,  1655.00,   200.00},
+{ "Old Venturas Strip",           2162.30,  2012.10,   -89.00,  2685.10,  2202.70,   110.90},
+{ "Palisades",                   -2994.40,   458.40,    -6.10, -2741.00,  1339.60,   200.00},
+{ "Paradiso",                    -2741.00,   793.40,    -6.10, -2533.00,  1268.40,   200.00},
+{ "Pershing Square",              1440.90, -1722.20,   -89.00,  1583.50, -1577.50,   110.90},
+{ "Pilgrim",                      2437.30,  1383.20,   -89.00,  2624.40,  1783.20,   110.90},
+{ "Pilgrim",                      2624.40,  1383.20,   -89.00,  2685.10,  1783.20,   110.90},
+{ "Pilson Intersection",          1098.30,  2243.20,   -89.00,  1377.30,  2507.20,   110.90},
+{ "Pirates in Men's Pants",       1817.30,  1469.20,   -89.00,  2027.40,  1703.20,   110.90},
+{ "Playa del Seville",            2703.50, -2126.90,   -89.00,  2959.30, -1852.80,   110.90},
+{ "Prickle Pine",                 1534.50,  2583.20,   -89.00,  1848.40,  2863.20,   110.90},
+{ "Prickle Pine",                 1117.40,  2507.20,   -89.00,  1534.50,  2723.20,   110.90},
+{ "Prickle Pine",                 1848.40,  2553.40,   -89.00,  1938.80,  2863.20,   110.90},
+{ "Prickle Pine",                 1938.80,  2624.20,   -89.00,  2121.40,  2861.50,   110.90},
+{ "Queens",                      -2533.00,   458.40,     0.00, -2329.30,   578.30,   200.00},
+{ "Queens",                      -2593.40,    54.70,     0.00, -2411.20,   458.40,   200.00},
+{ "Queens",                      -2411.20,   373.50,     0.00, -2253.50,   458.40,   200.00},
+{ "Randolph Industrial Estate",   1558.00,   596.30,   -89.00,  1823.00,   823.20,   110.90},
+{ "Redsands East",                1817.30,  2011.80,   -89.00,  2106.70,  2202.70,   110.90},
+{ "Redsands East",                1817.30,  2202.70,   -89.00,  2011.90,  2342.80,   110.90},
+{ "Redsands East",                1848.40,  2342.80,   -89.00,  2011.90,  2478.40,   110.90},
+{ "Redsands West",                1236.60,  1883.10,   -89.00,  1777.30,  2142.80,   110.90},
+{ "Redsands West",                1297.40,  2142.80,   -89.00,  1777.30,  2243.20,   110.90},
+{ "Redsands West",                1377.30,  2243.20,   -89.00,  1704.50,  2433.20,   110.90},
+{ "Redsands West",                1704.50,  2243.20,   -89.00,  1777.30,  2342.80,   110.90},
+{ "Regular Tom",                  -405.70,  1712.80,    -3.00,  -276.70,  1892.70,   200.00},
+{ "Richman",                       647.50, -1118.20,   -89.00,   787.40,  -954.60,   110.90},
+{ "Richman",                       647.50,  -954.60,   -89.00,   768.60,  -860.60,   110.90},
+{ "Richman",                       225.10, -1369.60,   -89.00,   334.50, -1292.00,   110.90},
+{ "Richman",                       225.10, -1292.00,   -89.00,   466.20, -1235.00,   110.90},
+{ "Richman",                        72.60, -1404.90,   -89.00,   225.10, -1235.00,   110.90},
+{ "Richman",                        72.60, -1235.00,   -89.00,   321.30, -1008.10,   110.90},
+{ "Richman",                       321.30, -1235.00,   -89.00,   647.50, -1044.00,   110.90},
+{ "Richman",                       321.30, -1044.00,   -89.00,   647.50,  -860.60,   110.90},
+{ "Richman",                       321.30,  -860.60,   -89.00,   687.80,  -768.00,   110.90},
+{ "Richman",                       321.30,  -768.00,   -89.00,   700.70,  -674.80,   110.90},
+{ "Robada Intersection",         -1119.00,  1178.90,   -89.00,  -862.00,  1351.40,   110.90},
+{ "Roca Escalante",               2237.40,  2202.70,   -89.00,  2536.40,  2542.50,   110.90},
+{ "Roca Escalante",               2536.40,  2202.70,   -89.00,  2625.10,  2442.50,   110.90},
+{ "Rockshore East",               2537.30,   676.50,   -89.00,  2902.30,   943.20,   110.90},
+{ "Rockshore West",               1997.20,   596.30,   -89.00,  2377.30,   823.20,   110.90},
+{ "Rockshore West",               2377.30,   596.30,   -89.00,  2537.30,   788.80,   110.90},
+{ "Rodeo",                          72.60, -1684.60,   -89.00,   225.10, -1544.10,   110.90},
+{ "Rodeo",                          72.60, -1544.10,   -89.00,   225.10, -1404.90,   110.90},
+{ "Rodeo",                         225.10, -1684.60,   -89.00,   312.80, -1501.90,   110.90},
+{ "Rodeo",                         225.10, -1501.90,   -89.00,   334.50, -1369.60,   110.90},
+{ "Rodeo",                         334.50, -1501.90,   -89.00,   422.60, -1406.00,   110.90},
+{ "Rodeo",                         312.80, -1684.60,   -89.00,   422.60, -1501.90,   110.90},
+{ "Rodeo",                         422.60, -1684.60,   -89.00,   558.00, -1570.20,   110.90},
+{ "Rodeo",                         558.00, -1684.60,   -89.00,   647.50, -1384.90,   110.90},
+{ "Rodeo",                         466.20, -1570.20,   -89.00,   558.00, -1385.00,   110.90},
+{ "Rodeo",                         422.60, -1570.20,   -89.00,   466.20, -1406.00,   110.90},
+{ "Rodeo",                         466.20, -1385.00,   -89.00,   647.50, -1235.00,   110.90},
+{ "Rodeo",                         334.50, -1406.00,   -89.00,   466.20, -1292.00,   110.90},
+{ "San Andreas Sound",            2450.30,   385.50,  -100.00,  2759.20,   562.30,   200.00},
+{ "Santa Flora",                 -2741.00,   458.40,    -7.60, -2533.00,   793.40,   200.00},
+{ "Santa Maria Beach",             342.60, -2173.20,   -89.00,   647.70, -1684.60,   110.90},
+{ "Santa Maria Beach",              72.60, -2173.20,   -89.00,   342.60, -1684.60,   110.90},
+{ "Shady Cabin",                 -1632.80, -2263.40,    -3.00, -1601.30, -2231.70,   200.00},
+{ "Shady Creeks",                -1820.60, -2643.60,    -8.00, -1226.70, -1771.60,   200.00},
+{ "Shady Creeks",                -2030.10, -2174.80,    -6.10, -1820.60, -1771.60,   200.00},
+{ "Sobell Rail Yards",            2749.90,  1548.90,   -89.00,  2923.30,  1937.20,   110.90},
+{ "Temple",                       1252.30, -1130.80,   -89.00,  1378.30, -1026.30,   110.90},
+{ "Temple",                       1252.30, -1026.30,   -89.00,  1391.00,  -926.90,   110.90},
+{ "Temple",                       1252.30,  -926.90,   -89.00,  1357.00,  -910.10,   110.90},
+{ "Temple",                        952.60, -1130.80,   -89.00,  1096.40,  -937.10,   110.90},
+{ "Temple",                       1096.40, -1130.80,   -89.00,  1252.30, -1026.30,   110.90},
+{ "Temple",                       1096.40, -1026.30,   -89.00,  1252.30,  -910.10,   110.90},
+{ "The Emerald Isle",             2011.90,  2202.70,   -89.00,  2237.40,  2508.20,   110.90},
+{ "The Farm",                    -1209.60, -1317.10,   114.90,  -908.10,  -787.30,   251.90},
+{ "The Mako Span",                1664.60,   401.70,     0.00,  1785.10,   567.20,   200.00},
+{ "The Panopticon",               -947.90,  -304.30,    -1.10,  -319.60,   327.00,   200.00},
+{ "The Sherman Dam",              -968.70,  1929.40,    -3.00,  -481.10,  2155.20,   200.00},
+{ "The Visage",                   1817.30,  1863.20,   -89.00,  2106.70,  2011.80,   110.90},
+{ "The Visage",                   1817.30,  1703.20,   -89.00,  2027.40,  1863.20,   110.90},
+{ "Unity Station",                1692.60, -1971.80,   -20.40,  1812.60, -1932.80,    79.50},
+{ "Valle Ocultado",               -936.60,  2611.40,     2.00,  -715.90,  2847.90,   200.00},
+{ "Verdant Bluffs",                930.20, -2488.40,   -89.00,  1249.60, -2006.70,   110.90},
+{ "Verdant Bluffs",               1073.20, -2006.70,   -89.00,  1249.60, -1842.20,   110.90},
+{ "Verdant Bluffs",               1249.60, -2179.20,   -89.00,  1692.60, -1842.20,   110.90},
+{ "Verdant Meadows",                37.00,  2337.10,    -3.00,   435.90,  2677.90,   200.00},
+{ "Verona Beach",                  647.70, -2173.20,   -89.00,   930.20, -1804.20,   110.90},
+{ "Verona Beach",                  930.20, -2006.70,   -89.00,  1073.20, -1804.20,   110.90},
+{ "Verona Beach",                  851.40, -1804.20,   -89.00,  1046.10, -1577.50,   110.90},
+{ "Verona Beach",                 1161.50, -1722.20,   -89.00,  1323.90, -1577.50,   110.90},
+{ "Verona Beach",                 1046.10, -1722.20,   -89.00,  1161.50, -1577.50,   110.90},
+{ "Vinewood",                      787.40, -1310.20,   -89.00,   952.60, -1130.80,   110.90},
+{ "Vinewood",                      787.40, -1130.80,   -89.00,   952.60,  -954.60,   110.90},
+{ "Vinewood",                      647.50, -1227.20,   -89.00,   787.40, -1118.20,   110.90},
+{ "Vinewood",                      647.70, -1416.20,   -89.00,   787.40, -1227.20,   110.90},
+{ "Whitewood Estates",             883.30,  1726.20,   -89.00,  1098.30,  2507.20,   110.90},
+{ "Whitewood Estates",            1098.30,  1726.20,   -89.00,  1197.30,  2243.20,   110.90},
+{ "Willowfield",                  1970.60, -2179.20,   -89.00,  2089.00, -1852.80,   110.90},
+{ "Willowfield",                  2089.00, -2235.80,   -89.00,  2201.80, -1989.90,   110.90},
+{ "Willowfield",                  2089.00, -1989.90,   -89.00,  2324.00, -1852.80,   110.90},
+{ "Willowfield",                  2201.80, -2095.00,   -89.00,  2324.00, -1989.90,   110.90},
+{ "Willowfield",                  2541.70, -1941.40,   -89.00,  2703.50, -1852.80,   110.90},
+{ "Willowfield",                  2324.00, -2059.20,   -89.00,  2541.70, -1852.80,   110.90},
+{ "Willowfield",                  2541.70, -2059.20,   -89.00,  2703.50, -1941.40,   110.90},
+{ "Yellow Bell Station",          1377.40,  2600.40,   -21.90,  1492.40,  2687.30,    78.00},
+{ "Los Santos",                     44.60, -2892.90,  -242.90,  2997.00,  -768.00,   900.00},
+{ "Bone County",                  -480.50,   596.30,  -242.90,   869.40,  2993.80,   900.00},
+{ "Tierra Robada",               -2997.40,  1659.60,  -242.90,  -480.50,  2993.80,   900.00},
+{ "Tierra Robada",               -1213.90,   596.30,  -242.90,  -480.50,  1659.60,   900.00},
+{ "Flint County",                -1213.90, -2892.90,  -242.90,    44.60,  -768.00,   900.00},
+{ "Whetstone",                   -2997.40, -2892.90,  -242.90, -1213.90, -1115.50,   900.00}
+};
+
+
+public update_zones()
+{
+ 	new line1[10];
+ 	new line2[10];
+	for(new i=0; i<MAX_PLAYERS_; i++)
+	{
+		if(IsPlayerConnected(i) && zoneupdates[i] == 1)
+		{
+   			if(IsPlayerInZone(i,player_zone[i]))
+  			{
+  			}
+   			else {
+			    new player_zone_before;
+			    player_zone_before = player_zone[i];
+			    player_zone[i] = -1;
+				for(new j=0; j<sizeof(zones);j++)
+				{
+	     			if(IsPlayerInZone(i,j) && player_zone[i] == -1)
+					{
+
+						if(player_zone_before == -1)
+						{
+						    new string[128];
+					 		format(string,sizeof(string),"%s",zones[j][zone_name]);
+						 	TextDrawSetString(LocationTD[i],string);
+						}
+	   	  				else
+					 	{
+					 		if(strcmp(zones[j][zone_name],zones[player_zone_before][zone_name],true) != 0)
+					 		{
+					 		    new string[128];
+					 		    format(string,sizeof(string),"%s",zones[j][zone_name]);
+						 		TextDrawSetString(LocationTD[i],string);
+							}
+						}
+						player_zone[i] = j;
+				      	format(line1,10,"p%dzone",i);
+				      	format(line2,10,"%d",j);
+				      	PropertySet(line1,line2);
+					}
+				}
+    			if(player_zone[i] == -1) player_zone[i] = player_zone_before;
+			}
+   		}
+	}
+}
+
+IsPlayerInZone(playerid, zoneid)
+{
+ 	if(zoneid == -1) return 0;
+ 	new Float:x, Float:y, Float:z;
+ 	GetPlayerPos(playerid,x,y,z);
+	if(x >= zones[zoneid][zone_minx] && x < zones[zoneid][zone_maxx]
+	&& y >= zones[zoneid][zone_miny] && y < zones[zoneid][zone_maxy]
+	&& z >= zones[zoneid][zone_minz] && z < zones[zoneid][zone_maxz]
+	&& z < 1200.0000) return 1;
+ 	return 0;
+}
+
+////////////////////////IRC/////////////////////////
+// Name that everyone will see
+#define BOT_1_NICKNAME "guy1"
+// Name that will only be visible in a whois
+#define BOT_1_REALNAME "guy1"
+// Name that will be in front of the hostname (username@hostname)
+#define BOT_1_USERNAME "guy1"
+
+#define BOT_2_NICKNAME "guy2"
+#define BOT_2_REALNAME "guy2"
+#define BOT_2_USERNAME "guy2"
+
+#define IRC_BOT_PASSWORD "123456"
+
+#define IRC_SERVER "5.175.134.241"
+#define IRC_PORT (6667) //change this if nessecary
+#define IRC_CHANNEL "#robo"
+
+// Maximum number of bots in the filterscript
+#define MAX_BOTS (2) //Trust me, unless you know how to script don't touch this
+
+#define PLUGIN_VERSION "1.5" //Don't touch this :P
+
+new botIDs[MAX_BOTS], groupID;
+
+/*
+	When the filterscript is loaded, two bots will connect and a group will be
+	created for them.
+*/
+
+public OnGameModeInit()
+{
+	// Don't use these lines if it's a filterscript
+	SetGameModeText("Cops And Robbers at FUN!");
+	DisableInteriorEnterExits();
+	UsePlayerPedAnims();
+    Textdraw2 = TextDrawCreate(227.000000, 10.000000, "~r~Press F8 to take a selfie.~n~~n~~y~Num 6/Num 4 to move the camera.~n~~n~~p~/td to hide/show the textdraws.~n~~n~~g~/selfie to stop taking selfies.~n~~n~~w~/headmove to disable the head movement.");
+    TextDrawBackgroundColor(Textdraw2, 255);
+    TextDrawFont(Textdraw2, 1);
+    TextDrawLetterSize(Textdraw2, 0.500000, 1.300000);
+    TextDrawColor(Textdraw2, -16776961);
+    TextDrawSetOutline(Textdraw2, 0);
+    TextDrawSetProportional(Textdraw2, 1);
+    TextDrawSetShadow(Textdraw2, 1);
+    TextDrawSetSelectable(Textdraw2, 0);
+    zone1 = GangZoneCreate(2048.504, 1554.484, 2314.034, 1759.491);
+	AddPlayerClass(282,2294.5054,2451.6216,10.8203,86.3132,0,0,0,0,0,0); // COPSPAWN 1
+	AddPlayerClass(283,2251.6934,2488.1682,10.9908,74.5216,0,0,0,0,0,0); // COPSPAWN 2
+	AddPlayerClass(267,2238.6680,2449.3762,11.0372,94.4358,0,0,0,0,0,0); // COPSPAWN 3
+	AddPlayerClass(287,2238.6680,2449.3762,11.0372,94.4358,0,0,0,0,0,0); // ARMY 1
+	AddPlayerClass(7,2083.3647,1293.5730,10.8203,99.5931,0,0,0,0,0,0); //TAXI 1
+	AddPlayerClass(142,2083.3647,1293.5730,10.8203,99.5931,0,0,0,0,0,0); //TAXI 1
+	AddPlayerClass(294,2189.2327,1993.9100,10.8203,92.4181,0,0,0,0,0,0); // Civil.Spawn.1
+	AddPlayerClass(12,2088.2817,1683.1819,10.8203,87.0611,0,0,0,0,0,0); // Civil.Spawn.2
+	AddPlayerClass(24,1719.9706,1605.7681,10.0156,238.2347,0,0,0,0,0,0); // Civil.Spawn.3
+	AddPlayerClass(33,2089.4197,1450.0242,10.8203,137.4735,0,0,0,0,0,0); // Civil.Spawn.4
+	AddPlayerClass(1,2026.5941,1007.7623,10.8203,275.0451,0,0,0,0,0,0); // Civil.Spawn.5
+	AddPlayerClass(2,2083.3647,1293.5730,10.8203,99.5931,0,0,0,0,0,0); // Civil.Spawn.6
+	AddPlayerClass(270,2083.3647,1293.5730,10.8203,99.5931,0,0,0,0,0,0); //CIVIL SPAWN 7
+	armycar1 = AddStaticVehicleEx(432,279.2000100,1996.1999500,17.7000000,270.0000000,95,10,15); //Rhino
+	armycar2 = AddStaticVehicleEx(432,278.7999900,1989.5000000,17.7000000,270.0000000,95,10,15); //Rhino
+	armycar3 = AddStaticVehicleEx(432,281.2000100,1947.4000200,17.7000000,270.0000000,95,10,15); //Rhino
+	armycar4 = AddStaticVehicleEx(432,279.8999900,1954.5000000,17.7000000,270.0000000,95,10,15); //Rhino
+	armycar5 = AddStaticVehicleEx(432,279.7000100,1961.5999800,17.7000000,270.0000000,95,10,15); //Rhino
+	armycar6 = AddStaticVehicleEx(432,284.1000100,2027.8000500,17.7000000,270.0000000,95,10,15); //Rhino
+	armycar7 = AddStaticVehicleEx(432,284.3999900,2021.1999500,17.7000000,270.0000000,95,10,15); //Rhino
+	armycar8 = AddStaticVehicleEx(520,304.1000100,1950.5000000,18.6000000,276.0000000,-1,-1,15); //Hydra
+	armycar9 = AddStaticVehicleEx(520,303.1000100,1961.1999500,18.6000000,275.9990000,-1,-1,15); //Hydra
+	armycar10 = AddStaticVehicleEx(520,303.5000000,1974.9000200,18.6000000,275.9990000,-1,-1,15); //Hydra
+	armycar11 = AddStaticVehicleEx(520,318.3999900,1963.3000500,18.6000000,275.9990000,-1,-1,15); //Hydra
+	armycar12 = AddStaticVehicleEx(520,303.2999900,1992.8000500,18.6000000,275.9990000,-1,-1,15); //Hydra
+	armycar13 = AddStaticVehicleEx(520,303.7000100,2003.3000500,18.6000000,265.9990000,-1,-1,15); //Hydra
+	armycar14 = AddStaticVehicleEx(520,304.0000000,2014.3000500,18.6000000,259.9950000,-1,-1,15); //Hydra
+	armycar15 = AddStaticVehicleEx(520,319.8999900,2003.0000000,18.6000000,265.9910000,-1,-1,15); //Hydra
+	
+	taxicar1 = AddStaticVehicle(437,2110.4626,1412.0054,10.9535,177.9904,25,78); // Taxicar
+	taxicar2 = AddStaticVehicle(437,2106.8938,1394.0720,10.9537,358.1680,25,78); // Taxicar1
+	taxicar3 = AddStaticVehicle(437,2138.8247,1394.5175,10.9445,355.8246,25,78); // Taxicar2
+	taxicar4 = AddStaticVehicle(437,2145.5571,1411.5134,10.9535,178.3461,25,78); // Taxicar3
+	taxicar5 = AddStaticVehicle(438,2153.1113,1409.5483,10.8269,1.1228,6,119); // TAXI5
+	taxicar6 = AddStaticVehicle(438,2152.3984,1398.1033,10.8217,177.5446,6,119); // TAXI5
+	taxicar7 = AddStaticVehicle(420,2091.9932,1393.4031,10.5991,85.3860,6,29); // TAXI6
+	taxicar8 = AddStaticVehicle(420,2094.2839,1387.3352,10.5988,173.5145,6,29); // TAXI7
+	//
+	Create3DTextLabel("Opening shortly", COLOR_GREEN, 1060.6495,1804.2142,10.8203, 50.0, 0, 0);
+	
+	blackTD = TextDrawCreate(-20.000000,2.000000,"nothng");
+    TextDrawUseBox(blackTD,1);
+    TextDrawBoxColor(blackTD,0x000000ff);
+    TextDrawTextSize(blackTD,660.000000,22.000000);
+    TextDrawAlignment(blackTD,0);
+    TextDrawBackgroundColor(blackTD,0x000000ff);
+    TextDrawFont(blackTD,3);
+    TextDrawLetterSize(blackTD,1.000000,52.200000);
+    TextDrawColor(blackTD,0x000000ff);
+    TextDrawSetOutline(blackTD,1);
+    TextDrawSetProportional(blackTD,1);
+    TextDrawSetShadow(blackTD,1);
+
+    Pizzsafe = CreateDynamicObject(1829, 379.90164, -115.80128, 1000.96735,   0.00000, 0.00000, 269.57169);
+    
+	//RANDOM
+	randommsg = TextDrawCreate(7.000000, 427.000000, "Owner ~r~ superrobot48 ~g~ Co-Owner ~r~ Umar");
+	TextDrawBackgroundColor(randommsg, 255);
+	TextDrawFont(randommsg, 1);
+	TextDrawLetterSize(randommsg, 0.379999, 1.499999);
+	TextDrawColor(randommsg, -1);
+	TextDrawSetOutline(randommsg, 1);
+	TextDrawSetProportional(randommsg, 1);
+	
+	//
+	blackTD = TextDrawCreate(-20.000000,2.000000,"|");
+    TextDrawUseBox(blackTD,1);
+    TextDrawBoxColor(blackTD,0x000000ff);
+    TextDrawTextSize(blackTD,660.000000,22.000000);
+    TextDrawAlignment(blackTD,0);
+    TextDrawBackgroundColor(blackTD,0x000000ff);
+    TextDrawFont(blackTD,3);
+    TextDrawLetterSize(blackTD,1.000000,52.200000);
+    TextDrawColor(blackTD,0x000000ff);
+    TextDrawSetOutline(blackTD,1);
+    TextDrawSetProportional(blackTD,1);
+    TextDrawSetShadow(blackTD,1);
+   	
+	//AIRPORT
+ 	LoadStaticVehiclesFromFile("vehicles/lv_law.txt");
+	LoadStaticVehiclesFromFile("vehicles/lv_airport.txt");
+	LoadStaticVehiclesFromFile("vehicles/lv_gen.txt");
+    vehlist = LoadModelSelectionMenu("vehicles.txt");
+	
+	//TIMER
+	SetTimer("JailTimer", 1000, true);
+	SetTimer("ServerOneSecondVariables",1000,1);
+	SetTimer("PlayerOneSecondVariables",1000,1);
+	SetTimer("TaxiPay",5000,1);
+	SetTimer("RandomMessage",50000,1); // 8000 is for 8 seconds, if you want 50 seconds use 50000
+	SetTimer("Weather",600000,1);
+	AddStaticVehicle(411,2103.8975,2059.8701,10.3788,270.3074,64,1); // Infrernus_SEXSHOP
+	AddStaticVehicle(528,2278.4561,2442.5000,10.8645,179.9129,0,0); // COP_CAR
+	AddStaticVehicle(598,2256.6045,2459.8677,10.5650,359.7997,0,1); // COP_CAR1
+	AddStaticVehicle(523,2251.0256,2460.1929,10.3853,188.9598,0,0); // COPCAR2
+	ccar1 = AddStaticVehicle(411,1081.3878,1765.0499,10.6575,51.4641,1,1);
+	ccar2 = AddStaticVehicle(562,1035.3411,1765.5835,10.7537,337.7841,6,6);
+	//IRC
+		// Connect the first bot
+	botIDs[0] = IRC_Connect(IRC_SERVER, IRC_PORT, BOT_1_NICKNAME, BOT_1_REALNAME, BOT_1_USERNAME);
+	// Set the connect delay for the first bot to 20 seconds
+	IRC_SetIntData(botIDs[0], E_IRC_CONNECT_DELAY, 5);
+	// Connect the second bot
+	botIDs[1] = IRC_Connect(IRC_SERVER, IRC_PORT, BOT_2_NICKNAME, BOT_2_REALNAME, BOT_2_USERNAME);
+	// Set the connect delay for the second bot to 30 seconds
+	IRC_SetIntData(botIDs[1], E_IRC_CONNECT_DELAY, 7);
+	// Create a group (the bots will be added to it upon connect)
+	groupID = IRC_CreateGroup();
+	if(!zoneupdate) zoneupdate = SetTimer("update_zones",1000,4);
+ 	Servt=TextDrawCreate(545, 31, "00:00");
+    TextDrawColor(Servt, COLOR_WHITE);
+    Tsec= 0;
+    THrs= 0;
+    SetTimer("TimeU",1000,true);
+    skinlist = LoadModelSelectionMenu("skins.txt");
+    Seven = LoadModelSelectionMenu("Seven.txt");
+    for(new i = 1; i <= MAX_VEHICLES; i++)
+	{
+	    SetVehicleNumberPlate(i, ""COL_RED"SUPER-GM");
+		SetVehicleToRespawn(i);
+	}
+	return 1;
+}
+
+public OnGameModeExit()
+{
+    // Disconnect the first bot
+	IRC_Quit(botIDs[0], "Filterscript exiting.");
+	// Disconnect the second bot
+	IRC_Quit(botIDs[1], "Filterscript exiting.");
+	// Destroy the group
+	IRC_DestroyGroup(groupID);
+	return 1;
+}
+
+public OnPlayerRequestClass(playerid, classid)
+{
+	SetPlayerCameraPos(playerid, 2093.99, 1913.17, 11.70);
+	SetPlayerPos(playerid,2086.1331,1910.1025,12.5298);
+	SetPlayerFacingAngle(playerid,298.6580);
+	SetPlayerCameraLookAt(playerid,2086.1331,1910.1025,12.5298);
+	SetPlayerTeamFromClass(playerid,classid);
+ 	switch (classid)
+	{
+		case 0,1,2:
+ 		{
+			GameTextForPlayer(playerid, "~b~POLICE OFFICER~n~~w~CITY OFFICER", 3000, 5);
+		}
+		case 3:
+		{
+		    GameTextForPlayer(playerid, "~g~ Army", 3000, 5);
+		}
+		case 4,5:
+		{
+		    GameTextForPlayer(playerid, "~g~ ~h~ Taxi", 3000, 5);
+		}
+		case 6,7,8,9,10:
+  		{
+	        GameTextForPlayer(playerid, "~r~Civillian", 3000, 5);
+		}
+	}
+	return 1;
+}
+
+SetPlayerTeamFromClass(playerid, classid)
+{
+ 	if(classid == 0 || classid == 1 || classid == 2)
+	{
+		gTeam[playerid] = TEAM_COP;
+	}
+	if(classid == 3)
+	{
+	    gTeam[playerid] = TEAM_ARMY;
+	}
+	if(classid == 4 || classid == 5)
+	{
+	    gTeam[playerid] = TEAM_TAXI;
+	}
+	else if(classid >= 6)
+	{
+	    gTeam[playerid] = TEAM_CIVIL;
+	}
+}
+
+SetPlayerToTeamColour(playerid)
+{
+    if(gTeam[playerid] == TEAM_CIVIL)
+    {
+        SetPlayerColor(playerid,COLOR_WHITE); //Green
+    }
+    if(gTeam[playerid] == TEAM_COP)
+    {
+        SetPlayerColor(playerid,COLOR_BLUE); // Blue
+    }
+    if(gTeam[playerid] == TEAM_ARMY)
+    {
+        SetPlayerColor(playerid,COLOR_GREEN); //GREEN
+	}
+	if(gTeam[playerid] == TEAM_KIDNAP)
+	{
+	    SetPlayerColor(playerid,COLOR_WHITE); //Green
+	}
+	if(gTeam[playerid] == TEAM_TERRO)
+	{
+	    SetPlayerColor(playerid,COLOR_WHITE); //Green
+	}
+	if(gTeam[playerid] == TEAM_TAXI)
+	{
+	    SetPlayerColor(playerid,COLOR_DEEPGREEN); //Green
+	}
+
+}
+
+public OnPlayerConnect(playerid)
+{
+
+    new name[MAX_PLAYER_NAME], string[23 + MAX_PLAYER_NAME];
+	new joinMsg[128]; //Making a new variable called 'name'. name[MAX_PLAYER_NAME] is created so we can use it to get player's name.
+    GetPlayerName(playerid,name,sizeof(name)); //Get player's name
+    format(string, sizeof(string), "%s has joined the server", name);
+    SendClientMessageToAll(0xFFFF00FF, string);
+   	format(joinMsg, sizeof(joinMsg), "02[%d] 03*** %s has joined the server.", playerid, name);
+	IRC_GroupSay(groupID, IRC_CHANNEL, joinMsg);
+	zoneupdates[playerid] =1;
+	takingselfie[playerid] = 0;
+	GangZoneShowForPlayer(playerid, zone1, 0x00FF0096);
+	if(fexist(UserPath(playerid)))
+    {
+        INI_ParseFile(UserPath(playerid), "LoadUser_%s", .bExtra = true, .extra = playerid);
+        ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_INPUT,""COL_WHITE"Login",""COL_WHITE"Type your password below to login.","Login","Quit");
+    }
+    else
+    {
+        ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT,""COL_WHITE"Register",""COL_WHITE"Type your password below to register a new account.","Register","Quit");
+    }
+
+   	CP_SEXSHOP = CreateDynamicCP(-104.9387,-8.6849,1000.7188, 2.0, .interiorid = 3);
+	CP_tatoo = CreateDynamicCP(-201.2237,-42.7339,1002.2734, 2.0, .interiorid = 3);
+	CP_cbell = CreateDynamicCP(370.6909,-7.0572,1001.8589, 0.5, .interiorid = 9);
+	CP_stackwell = CreateDynamicCP(379.1041,-115.8127,1001.4922, 2.0, .interiorid = 5);
+	CP_virtualworld = CreateDynamicCP(2005.4336,1239.7577,10.8130, 2.0, .interiorid = 0);
+	CP_zip = CreateDynamicCP(162.7987,-81.1891,1001.8047, 2.0, .interiorid = 18);
+	CP_terro = CreateDynamicCP(2298.7168,1570.6512,11.0469, 2.0, .interiorid = 0);
+	CP_sevenrob = CreateDynamicCP(-22.7304,-55.6123,1003.5469, 2.0, .interiorid = 6);
+	CP_CARSHOW = CreateDynamicCP(1049.5934,1760.0658,11.0953, 2.0, .interiorid = 0);
+	CP_zone1 = CreateDynamicCP(2111.3599,1684.4218,10.5078, 2.0, .interiorid = 0);
+	SetPlayerMapIcon(playerid, 0, 1060.6495,1804.2142,10.8203, 55, 0, MAPICON_LOCAL);
+ 	SetPlayerMapIcon(playerid, 1, 2298.7168,1570.6512,11.0469, 42, 0, MAPICON_LOCAL);
+	//JAIL
+	JailTimerr[playerid] = TextDrawCreate(505.000000, 411.000000, "Jailtime: 180");
+	TextDrawBackgroundColor(JailTimerr[playerid], -1);
+	TextDrawFont(JailTimerr[playerid], 3);
+	TextDrawLetterSize(JailTimerr[playerid], 0.529999, 1.299999);
+	TextDrawColor(JailTimerr[playerid], 65535);
+	TextDrawSetOutline(JailTimerr[playerid], 1);
+	TextDrawSetProportional(JailTimerr[playerid], 1);
+	TextDrawUseBox(JailTimerr[playerid], 1);
+	TextDrawBoxColor(JailTimerr[playerid], 255);
+	TextDrawTextSize(JailTimerr[playerid], 633.000000, 0.000000);
+	
+	LocationTD[playerid] = TextDrawCreate(43.000000, 327.000000, "Downtown");
+	TextDrawBackgroundColor(LocationTD[playerid], 255);
+	TextDrawFont(LocationTD[playerid], 1);
+	TextDrawLetterSize(LocationTD[playerid], 0.500000, 1.000000);
+	TextDrawColor(LocationTD[playerid], -1);
+	TextDrawSetOutline(LocationTD[playerid], 0);
+	TextDrawSetProportional(LocationTD[playerid], 1);
+	TextDrawSetShadow(LocationTD[playerid], 1);
+	rhinopickup = CreatePickup(1313, 2, 2094.9404,1668.0839,10.7978, -1);
+    boxinggpickup = CreatePickup(1313, 2, 869.3101,2141.5278,10.8203, -1);
+    rocketpickup = CreateDynamicPickup(35, 2, 2344.3066,381.8008,26.4293);
+    
+    
+    PlayAudioStreamForPlayer(playerid, "http://dl.dropboxusercontent.com/s/cqfn9c60nrnqn0p/One%20More%20Time%20-Akon.mp3");
+	//
+	
+    return 1;
+}
+
+public OnPlayerDisconnect(playerid, reason)
+{
+	new name[MAX_PLAYER_NAME], string[23 + MAX_PLAYER_NAME]; //Making a new variable called 'name'. name[MAX_PLAYER_NAME] is created so we can use it to get player's name.
+    GetPlayerName(playerid,name,sizeof(name)); //Get player's name
+    TextDrawHideForPlayer(playerid,LocationTD[playerid]);
+    new leaveMsg[128],  reasonMsg[8];
+    format(string, sizeof(string), "%s has left the server", name);
+    SendClientMessageToAll(0xFFFF00FF, string);
+    takingselfie[playerid] = 0;
+    new INI:File = INI_Open(UserPath(playerid));
+    INI_SetTag(File,"data");
+    INI_WriteInt(File,"Cash",GetPlayerMoney(playerid));
+    INI_WriteInt(File,"Admin",PlayerInfo[playerid][AdminLevel]);
+    INI_WriteInt(File,"Kills",PlayerInfo[playerid][pKills]);
+    INI_WriteInt(File,"Deaths",PlayerInfo[playerid][pDeaths]);
+    INI_WriteInt(File,"Score",GetPlayerScore(playerid));
+    INI_WriteInt(File,"TSkill",PlayerInfo[playerid][TSKILL]);
+    INI_WriteInt(File,"C4s",PlayerInfo[playerid][HasC4]);
+    INI_WriteInt(File,"Ropes",PlayerInfo[playerid][HasRope]);
+    INI_WriteInt(File,"KidnapSkill",PlayerInfo[playerid][KSKILL]);
+    INI_WriteInt(File,"Groove",PlayerInfo[playerid][Groove]);
+    INI_WriteInt(File,"Traids",PlayerInfo[playerid][Traids]);
+    INI_WriteInt(File,"Aztec",PlayerInfo[playerid][Aztec]);
+    IsCuffed[playerid] =0;
+    Anticuff[playerid] =0;
+    INI_Close(File);
+    if(DRIVING_RHINO[playerid] == 1)
+    {
+        DestroyVehicle(RHINO);
+        DRIVING_RHINO[playerid] = 0;
+	}
+	TextDrawDestroy(JailTimerr[playerid]);
+	switch(reason)
+	{
+		case 0: reasonMsg = "Timeout";
+		case 1: reasonMsg = "Leaving";
+		case 2: reasonMsg = "Kicked";
+	}
+	GetPlayerName(playerid, name, sizeof(name));
+	format(leaveMsg, sizeof(leaveMsg), "02[%d] 03*** %s has left the server. (%s)", playerid, name, reasonMsg);
+	IRC_GroupSay(groupID, IRC_CHANNEL, leaveMsg);
+    return 1;
+}
+
+public OnPlayerSpawn(playerid)
+{
+    TextDrawShowForPlayer(playerid, LocationTD[playerid]);
+    TextDrawShowForPlayer(playerid,Servt);
+    SetPlayerWantedLevel(playerid,0);
+    TextDrawShowForPlayer(playerid, randommsg);
+    StopAudioStreamForPlayer(playerid); // Stop the audio stream
+    if(gTeam[playerid] == TEAM_COP)
+    {
+        new Random = random(sizeof(RandomCopSpawns));
+	    SetPlayerPos(playerid, RandomCopSpawns[Random][0], RandomCopSpawns[Random][1], RandomCopSpawns[Random][2]);
+	    SetPlayerFacingAngle(playerid, RandomCopSpawns[Random][3]);
+	    GivePlayerWeapon(playerid, 26, 64);
+	    GivePlayerWeapon(playerid, 16, 5);
+	    GivePlayerWeapon(playerid, 24, 80);
+	    GivePlayerWeapon(playerid, 30, 224);
+        SendClientMessage(playerid,COLOR_BLUE,"You Are A COP");
+        SetPlayerWantedLevel(playerid,0);
+        ShowPlayerDialog(playerid, DIALOG_COPSINFO, DIALOG_STYLE_MSGBOX,""COL_WHITE"You are a Cop",""COL_GREEN"You are a cop \n Your job is to take care of criminal activity in town \n They will rob stores / Kill each other \n So your idea is not to kill them but to arrest them using the command /cuff and /arrest \n Good Luck!","Ok","");
+	}
+	if(gTeam[playerid] == TEAM_RAPIST)
+	{
+	    new Random = random(sizeof(RandomSpawns));
+	    SetPlayerPos(playerid, RandomSpawns[Random][0], RandomSpawns[Random][1], RandomSpawns[Random][2]);
+	    SetPlayerFacingAngle(playerid, RandomSpawns[Random][3]);
+	    GivePlayerWeapon(playerid, 26, 64);
+	    GivePlayerWeapon(playerid, 16, 5);
+	    GivePlayerWeapon(playerid, 24, 80);
+	    GivePlayerWeapon(playerid, 30, 224);
+        SendClientMessage(playerid,COLOR_RED,"You Are A Rapeist");
+        ShowPlayerDialog(playerid, DIALOG_SKILLS, DIALOG_STYLE_LIST, "Choose a skill", ""COL_RED"Terrorist \n "COL_GREEN" Kidnapper \n {FF00CC} Rapist", "OK", "");
+	}
+	if(gTeam[playerid] == TEAM_KIDNAP)
+	{
+	    new Random = random(sizeof(RandomSpawns));
+	    SetPlayerPos(playerid, RandomSpawns[Random][0], RandomSpawns[Random][1], RandomSpawns[Random][2]);
+	    SetPlayerFacingAngle(playerid, RandomSpawns[Random][3]);
+	    GivePlayerWeapon(playerid, 26, 64);
+	    GivePlayerWeapon(playerid, 16, 5);
+	    GivePlayerWeapon(playerid, 24, 80);
+	    GivePlayerWeapon(playerid, 30, 224);
+        SendClientMessage(playerid,COLOR_RED,"You Are A Civillian");
+        ShowPlayerDialog(playerid, DIALOG_SKILLS, DIALOG_STYLE_LIST, "Choose a skill", ""COL_RED"Terrorist \n "COL_GREEN" Kidnapper \n {FF00CC} Rapist", "OK", "");
+	}
+	if(gTeam[playerid] == TEAM_TERRO)
+	{
+	    new Random = random(sizeof(RandomSpawns));
+	    SetPlayerPos(playerid, RandomSpawns[Random][0], RandomSpawns[Random][1], RandomSpawns[Random][2]);
+	    SetPlayerFacingAngle(playerid, RandomSpawns[Random][3]);
+	    GivePlayerWeapon(playerid, 26, 64);
+	    GivePlayerWeapon(playerid, 16, 5);
+	    GivePlayerWeapon(playerid, 24, 80);
+	    GivePlayerWeapon(playerid, 30, 224);
+        SendClientMessage(playerid,COLOR_RED,"You Are A Civillian");
+        ShowPlayerDialog(playerid, DIALOG_SKILLS, DIALOG_STYLE_LIST, "Choose a skill", ""COL_RED"Terrorist \n "COL_GREEN" Kidnapper \n {FF00CC} Rapist", "OK", "");
+	}
+	if(gTeam[playerid] == TEAM_CIVIL)
+	{
+	    new Random = random(sizeof(RandomSpawns));
+	    SetPlayerPos(playerid, RandomSpawns[Random][0], RandomSpawns[Random][1], RandomSpawns[Random][2]);
+	    SetPlayerFacingAngle(playerid, RandomSpawns[Random][3]);
+	    GivePlayerWeapon(playerid, 26, 64);
+	    GivePlayerWeapon(playerid, 16, 5);
+	    GivePlayerWeapon(playerid, 24, 80);
+	    GivePlayerWeapon(playerid, 30, 224);
+        SendClientMessage(playerid,COLOR_RED,"You Are A Civillian");
+        ShowPlayerDialog(playerid, DIALOG_SKILLS, DIALOG_STYLE_LIST, "Choose a skill", ""COL_RED"Terrorist \n "COL_GREEN" Kidnapper \n {FF00CC} Rapist", "OK", "");
+	}
+	if(gTeam[playerid] == TEAM_ARMY)
+	{
+ 		new Random = random(sizeof(RandomArmySpawns));
+	    SetPlayerPos(playerid, RandomArmySpawns[Random][0], RandomArmySpawns[Random][1], RandomArmySpawns[Random][2]);
+	    SetPlayerFacingAngle(playerid, RandomArmySpawns[Random][3]);
+	    GivePlayerWeapon(playerid, 26, 64);
+	    GivePlayerWeapon(playerid, 16, 5);
+	    GivePlayerWeapon(playerid, 24, 80);
+	    GivePlayerWeapon(playerid, 30, 224);
+        SendClientMessage(playerid,COLOR_BLUE,"You Are An Army Personel");
+        SetPlayerWantedLevel(playerid,0);
+	 }
+    if(gTeam[playerid] == TEAM_TAXI)
+    {
+        new Random = random(sizeof(RandomTaxiSpawns));
+	    SetPlayerPos(playerid, RandomTaxiSpawns[Random][0], RandomTaxiSpawns[Random][1], RandomTaxiSpawns[Random][2]);
+	    SetPlayerFacingAngle(playerid, RandomTaxiSpawns[Random][3]);
+	    GivePlayerWeapon(playerid, 26, 64);
+	    GivePlayerWeapon(playerid, 16, 5);
+	    GivePlayerWeapon(playerid, 24, 80);
+	    GivePlayerWeapon(playerid, 30, 224);
+        SendClientMessage(playerid,COLOR_BLUE,"You Are A Taxi driver");
+        SetPlayerWantedLevel(playerid,0);
+	}
+	
+	SetPlayerToTeamColour(playerid);
+	IsCuffed[playerid] =0;
+	SetTimer("Zones_Update", 500, 1);
+	return 1;
+}
+
+public OnPlayerDeath(playerid, killerid, reason)
+{
+    SendDeathMessage(killerid, playerid, reason); // Shows the kill in the killfeed
+   	new msg[128], killerName[MAX_PLAYER_NAME], reasonMsg[32], playerName[MAX_PLAYER_NAME];
+	GetPlayerName(killerid, killerName, sizeof(killerName));
+	GetPlayerName(playerid, playerName, sizeof(playerName));
+	if(gTeam[killerid] == TEAM_ARMY)
+	{
+	    PlayerInfo[killerid][pKills]++;
+	    return 1;
+	}
+ 	if(IsBoxing[playerid] == 1)
+    {
+        format(msg, sizeof(msg), "%s Has Lost the boxing fight!", playerName);
+		IRC_GroupSay(groupID, IRC_CHANNEL, msg);
+		format(msg, sizeof(msg), "%s Has Killed %s and has won the match!", PlayerName(killerid),PlayerName(playerid) );
+		IRC_GroupSay(groupID, IRC_CHANNEL, msg);
+		SendClientMessageToAll(COLOR_WHITE, msg);
+        IsBoxing[playerid] = 0;
+        GivePlayerMoney(killerid,1000);
+        GivePlayerScore(killerid,1);
+	}
+    if(gTeam[killerid] == TEAM_COP)
+	{
+	    PlayerInfo[killerid][pKills]++;
+		return 1;
+	}
+    if(killerid != INVALID_PLAYER_ID)
+	{
+     if(GetPlayerWantedLevel(playerid) == 0)
+	    {
+	        SendClientMessage(killerid, COLOR_RED, "You killed an innocent person!, wanted level has been increased.");
+	        PlayerInfo[killerid][pKills]++;
+	        SetPlayerWantedLevel(killerid, GetPlayerWantedLevel(killerid) + 1);
+  			switch (reason)
+			{
+			case 0: reasonMsg = "Unarmed";
+			case 1: reasonMsg = "Brass Knuckles";
+			case 2: reasonMsg = "Golf Club";
+			case 3: reasonMsg = "Night Stick";
+			case 4: reasonMsg = "Knife";
+			case 5: reasonMsg = "Baseball Bat";
+			case 6: reasonMsg = "Shovel";
+			case 7: reasonMsg = "Pool Cue";
+			case 8: reasonMsg = "Katana";
+			case 9: reasonMsg = "Chainsaw";
+			case 10: reasonMsg = "Dildo";
+			case 11: reasonMsg = "Dildo";
+			case 12: reasonMsg = "Vibrator";
+			case 13: reasonMsg = "Vibrator";
+			case 14: reasonMsg = "Flowers";
+			case 15: reasonMsg = "Cane";
+			case 22: reasonMsg = "Pistol";
+			case 23: reasonMsg = "Silenced Pistol";
+			case 24: reasonMsg = "Desert Eagle";
+			case 25: reasonMsg = "Shotgun";
+			case 26: reasonMsg = "Sawn-off Shotgun";
+			case 27: reasonMsg = "Combat Shotgun";
+			case 28: reasonMsg = "MAC-10";
+			case 29: reasonMsg = "MP5";
+			case 30: reasonMsg = "AK-47";
+			case 31: reasonMsg = "M4";
+			case 32: reasonMsg = "TEC-9";
+			case 33: reasonMsg = "Country Rifle";
+			case 34: reasonMsg = "Sniper Rifle";
+			case 37: reasonMsg = "Fire";
+			case 38: reasonMsg = "Minigun";
+			case 41: reasonMsg = "Spray Can";
+			case 42: reasonMsg = "Fire Extinguisher";
+			case 49: reasonMsg = "Vehicle Collision";
+			case 50: reasonMsg = "Vehicle Collision";
+			case 51: reasonMsg = "Explosion";
+			default: reasonMsg = "Unknown";
+			}
+			format(msg, sizeof(msg), "04*** %s killed %s. (%s)", killerName, playerName, reasonMsg);
+		 	 } else {
+	        SendClientMessage(killerid, COLOR_GREEN, "You killed a wanted player!, you get $10,000 reward and a wanted level <3");
+	        PlayerInfo[killerid][pKills]++;
+			GivePlayerScore(killerid,1);
+	        GivePlayerMoney(killerid, 1000);
+	        SetPlayerWantedLevel(playerid,0);
+			IRC_GroupSay(groupID, IRC_CHANNEL, msg);
+	    }
+ 	}
+ 	else {
+	switch (reason)
+	{
+		case 53: format(msg, sizeof(msg), "04*** %s died. (Drowned)", playerName);
+		case 54: format(msg, sizeof(msg), "04*** %s died. (Collision)", playerName);
+		default: format(msg, sizeof(msg), "04*** %s died.", playerName);
+	}
+	IRC_GroupSay(groupID, IRC_CHANNEL, msg);
+	}
+	IRC_GroupSay(groupID, IRC_CHANNEL, msg);
+	SendClientMessageToAll(COLOR_WHITE, msg);
+    if(DRIVING_RHINO[playerid] == 1)
+    {
+        DestroyVehicle(RHINO);
+        DRIVING_RHINO[playerid] =0;
+	}
+    SetPlayerWantedLevel(playerid,0);
+    PlayerInfo[playerid][pDeaths]++;
+    IsCuffed[playerid] =0;
+    IsKidnapped[playerid] = 0;
+    Anticuff[playerid] = 0;
+    TogglePlayerControllable(playerid, 1);
+	SetPlayerWantedLevel(playerid,0);
+    return 1;
+}
+
+public OnVehicleSpawn(vehicleid)
+{
+	return 1;
+}
+
+public OnVehicleDeath(vehicleid, killerid)
+{
+	return 1;
+}
+
+public OnPlayerText(playerid, text[])
+{
+    SetPlayerChatBubble(playerid, text, 0xFFFFFF, 100.0, 3000); //everything what player types will be also shown on the player's head.
+   	new name[MAX_PLAYER_NAME], ircMsg[256];
+	GetPlayerName(playerid, name, sizeof(name));
+	format(ircMsg, sizeof(ircMsg), "02[%d] 07%s: %s", playerid, name, text);
+	IRC_GroupSay(groupID, IRC_CHANNEL, ircMsg);
+    return 1;
+}
+
+public OnPlayerCommandText(playerid, cmdtext[])
+{
+	return 1;
+}
+
+
+
+public OnPlayerEnterVehicle(playerid,vehicleid,ispassenger)
+{
+    if(GetVehicleModel(vehicleid) == 596)
+    {
+        IncreaseWantedLevel(playerid,1);
+    }
+    return 1;
+}
+
+public OnPlayerEnterDynamicCP(playerid, checkpointid)
+{
+   if(checkpointid == CP_SEXSHOP)
+   {
+       SendClientMessage(playerid, COLOR_RED, "Start robbery by typing /robthis");
+   }
+   if(checkpointid == CP_tatoo)
+   {
+   		SendClientMessage(playerid, COLOR_RED, "Start robbery by typing /robthis");
+   }
+   if(checkpointid == CP_cbell)
+   {
+        SendClientMessage(playerid, COLOR_RED, "Start robbery by typing /robthis");
+   }
+   if(checkpointid == CP_stackwell)
+   {
+        ShowPlayerDialog(playerid, DIALOG_robstackwell, DIALOG_STYLE_MSGBOX,""COL_WHITE"Robbery",""COL_GREEN"Do you want to start robbery?","Ok","Cancel");
+   }
+   if(checkpointid == CP_virtualworld)
+   {
+		if(PlayerVirtualWorld[playerid] == 1)
+		{
+		    ShowPlayerDialog(playerid, DIALOG_VIRTUALWORLD_1, DIALOG_STYLE_MSGBOX,""COL_WHITE"Virtual World",""COL_RED"Do you want to EXIT the virtual world?","Yes","No");
+		    return 1;
+		}
+        ShowPlayerDialog(playerid, DIALOG_VIRTUALWORLD, DIALOG_STYLE_MSGBOX,""COL_WHITE"Virtual World",""COL_GREEN"Do you want to Enter the virtual world?","Yes","No");
+   }
+   if(checkpointid == CP_zip)
+   {
+        ShowPlayerDialog(playerid, DIALOG_ZIP, DIALOG_STYLE_MSGBOX,""COL_WHITE"Robbery",""COL_GREEN"Do you want to start "COL_RED"robbery?","Ok","Cancel");
+   }
+   if(checkpointid == CP_sevenrob)
+   {
+        ShowPlayerDialog(playerid, DIALOG_SEVENROB, DIALOG_STYLE_LIST,""COL_RED"Robbery",""COL_GREEN"Ropes "COL_RED"500 $ \n Wine "COL_GREEN" 200$ \n Cigar "COL_GREEN" 200 $ \n Attempt Robbery","Ok","Cancel");
+   }
+   if(checkpointid == CP_terro)
+   {
+        ShowPlayerDialog(playerid, DIALOG_TERRO, DIALOG_STYLE_LIST,""COL_RED"Terrorist Shop","Buy 1 C4","Ok","Cancel");
+   }
+   if(checkpointid == CP_CARSHOW)
+   {
+        ShowPlayerDialog(playerid, DIALOG_CARSHOW, DIALOG_STYLE_LIST,""COL_RED"Car showroom","Buy Infernus $500000 \n "COL_GREEN"Buy Elegy $50000","Buy","Cancel");
+   }
+   if(checkpointid == CP_zone1)
+   {
+        if(takingzone1[playerid] > 1)
+		{
+		    SendClientMessage(playerid,COLOR_RED,"already being captured");
+		    return 1;
+		}
+        new string[128];
+        if(PlayerInfo[playerid][Aztec] > 1)
+        {
+            GangZoneFlashForAll(zone1,COLOR_BLUE);
+      		format(string,sizeof(string),"%s is now capturing Caliguas Casino for Gang Aztec",PlayerName(playerid));
+			SendClientMessage(playerid,0xFFFFFAA,string);
+			zone11[playerid] = SetTimerEx("zone111", 1000, true, "i", playerid);
+			takingzone1[playerid] = 60;
+		}
+        if(PlayerInfo[playerid][Groove] > 1)
+        {
+            GangZoneFlashForAll(zone1,COLOR_GREEN);
+      		format(string,sizeof(string),"%s is now capturing Caliguas Casino for Gang Groove",PlayerName(playerid));
+			SendClientMessage(playerid,0xFFFFFAA,string);
+			zone11[playerid] = SetTimerEx("zone111", 1000, true, "i", playerid);
+			takingzone1[playerid] = 60;
+		}
+        if(PlayerInfo[playerid][Traids] > 1)
+        {
+            GangZoneFlashForAll(zone1,COLOR_WHITE);
+      		format(string,sizeof(string),"%s is now capturing Caliguas Casino for Gang Aztec",PlayerName(playerid));
+			SendClientMessage(playerid,0xFFFFFAA,string);
+			zone11[playerid] = SetTimerEx("zone111", 1000, true, "i", playerid);
+			takingzone1[playerid] = 60;
+		}
+	}
+   return 1;
+}
+
+public OnPlayerLeaveDynamicCP(playerid, checkpointid)
+{
+	if(checkpointid == CP_SEXSHOP)
+	{
+	    if(ROBBING_SEXSHOP[playerid] >= 1)
+	    {
+	    	SendClientMessage(playerid, COLOR_RED, "[ERROR]Robbery Failed, You have left the checkpoint");
+	    	ROBBING_SEXSHOP[playerid] =0;
+	    	return 1;
+		}
+	}
+	if(checkpointid == CP_tatoo)
+	{
+	    if(ROBBING_TATOO[playerid] >=1)
+	    {
+	        SendClientMessage(playerid, COLOR_RED, "[ERROR]Robbery Failed, You have left the checkpoint");
+	        ROBBING_TATOO[playerid] =0;
+	        return 1;
+		}
+	}
+	if(checkpointid == CP_cbell)
+	{
+	    if(ROBBING_CBELL[playerid] >=1)
+	    {
+	        SendClientMessage(playerid, COLOR_RED, "[ERROR]Robbery Failed, You have left the checkpoint");
+	        ROBBING_CBELL[playerid] =0;
+		}
+	}
+	if(checkpointid == CP_stackwell)
+	{
+	    if(ROBBING_STACKWELL[playerid] >=1)
+	    {
+	        SendClientMessage(playerid, COLOR_RED, "[ERROR]Robbery Failed, You have left the checkpoint");
+	        ROBBING_STACKWELL[playerid] =0;
+		}
+	}
+	if(checkpointid == CP_zip)
+	{
+	    if(ROBBING_ZIP[playerid] >=1)
+	    {
+	        SendClientMessage(playerid, COLOR_RED, "[ERROR]Robbery Failed, You have left the checkpoint");
+	        ROBBING_ZIP[playerid] =0;
+		}
+	}
+	if(checkpointid == CP_sevenrob)
+	{
+	    if(ROBBING_SEVEN[playerid] >=1)
+	    {
+	        SendClientMessage(playerid, COLOR_RED, "[ERROR]Robbery Failed, You have left the checkpoint");
+	        ROBBING_SEVEN[playerid] =0;
+		}
+	}
+	if(checkpointid == CP_zone1)
+	{
+	    if(takingzone1[playerid] > 1)
+	    {
+     		SendClientMessage(playerid, COLOR_RED, "[ERROR]Capturing failed you have left the CP!");
+	        takingzone1[playerid] =0;
+		}
+	}
+
+	return 1;
+}
+
+public OnPlayerExitVehicle(playerid, vehicleid)
+{
+	return 1;
+}
+
+public OnPlayerStateChange(playerid, newstate, oldstate)
+{
+    new string[128];
+    new vehicleid;
+	vehicleid = GetPlayerVehicleID(playerid);
+    if(oldstate == PLAYER_STATE_DRIVER && newstate == PLAYER_STATE_ONFOOT)
+	{
+	    if(DRIVING_RHINO[playerid] == 1)
+	    {
+	        DestroyVehicle(RHINO);
+	        DRIVING_RHINO[playerid] =0;
+			return 1;
+		}
+	}
+	if(newstate == PLAYER_STATE_DRIVER)
+	{
+		if(GetPlayerVehicleID(playerid) == armycar1 ||GetPlayerVehicleID(playerid) == armycar2||
+		GetPlayerVehicleID(playerid) == armycar3||GetPlayerVehicleID(playerid) == armycar4||
+		GetPlayerVehicleID(playerid) == armycar5||GetPlayerVehicleID(playerid) == armycar5 ||
+		GetPlayerVehicleID(playerid) == armycar6||GetPlayerVehicleID(playerid) == armycar7 ||
+		GetPlayerVehicleID(playerid) == armycar8||GetPlayerVehicleID(playerid) == armycar9||
+		GetPlayerVehicleID(playerid) == armycar10||GetPlayerVehicleID(playerid) == armycar11||
+		GetPlayerVehicleID(playerid) == armycar12||GetPlayerVehicleID(playerid) == armycar13 ||
+		GetPlayerVehicleID(playerid) == armycar14 ||GetPlayerVehicleID(playerid) == armycar15)
+		{
+  			if(gTeam[playerid] != TEAM_ARMY)
+		    {
+				SendClientMessage(playerid,COLOR_ERROR,"Only Army Personnel can use the Army vehicles.");
+				RemovePlayerFromVehicle(playerid);
+		        return 1;
+			}
+		}
+		LastVehicle[playerid] =GetPlayerVehicleID(playerid);
+	}
+	if(newstate == PLAYER_STATE_DRIVER)
+	{
+	    if(vehicleid == ccar1 || vehicleid == ccar2)
+	    {
+			SendClientMessage(playerid,COLOR_ERROR,"You are not supposed to enter a buyable vehicle..");
+			RemovePlayerFromVehicle(playerid);
+			return 1;
+		}
+	}
+	if(newstate == PLAYER_STATE_PASSENGER)
+	{
+		for(new i=0; i<MAX_PLAYERS; i++)
+		{
+		    new pveh =GetPlayerVehicleID(playerid);
+		    if(OnDuty[i] == 1)
+		    {
+		        if(GetPlayerVehicleID(i) == pveh)
+		        {
+		            if(HasTaxiFare[i] == 1)
+			        {
+			            SendClientMessage(playerid,COLOR_ERROR,"This taxi already has a fare, please find your own taxi.");
+						RemovePlayerFromVehicle(playerid);
+						return 1;
+					}
+					if(GetPlayerMoney(playerid) < SkillPrice[i])
+					{
+					    SendClientMessage(playerid,COLOR_ERROR,"You cannot afford to pay the fare of this taxi.");
+						RemovePlayerFromVehicle(playerid);
+						return 1;
+					}
+		            SendClientMessage(playerid,COLOR_BLUE,"[[_Entered Taxi_]]");
+		            format(string,sizeof(string),"You are now paying %s(%d) $%d per 5 seconds to take you to your destination.",PlayerName(i),i,SkillPrice[i]);
+		            SendClientMessage(playerid,COLOR_DARKOLIVEGREEN,string);
+		            PayingTaxi[playerid] =1;
+		            HasTaxiFare[i] =playerid;
+
+		            SendClientMessage(i,COLOR_DEADCONNECT,"[[_Fare Picked Up_]]");
+					format(string,sizeof(string),"You have picked up %s(%d) and are charging them $%d per 5 seconds to take them to their destination.",PlayerName(playerid),playerid,SkillPrice[i]);
+					SendClientMessage(i,COLOR_DARKOLIVEGREEN,string);
+					return 1;
+				}
+			}
+		}
+	}
+	if(newstate == PLAYER_STATE_DRIVER)
+	{
+	    if(GetPlayerVehicleID(playerid) == taxicar1 || GetPlayerVehicleID(playerid) == taxicar2 ||
+	    GetPlayerVehicleID(playerid) == taxicar3 || GetPlayerVehicleID(playerid) == taxicar4 ||
+	    GetPlayerVehicleID(playerid) == taxicar5 || GetPlayerVehicleID(playerid) == taxicar6 ||
+	    GetPlayerVehicleID(playerid) == taxicar7 || GetPlayerVehicleID(playerid) == taxicar8)
+        {
+	        if(gTeam[playerid] == TEAM_TAXI && GetPlayerWantedLevel(playerid) == 0)
+	        {
+	            SendClientMessage(playerid,COLOR_DEADCONNECT,"[[_Taxi Vehicle_]]");
+	            SendClientMessage(playerid,COLOR_LIGHTBLUE,"Welcome to your Taxi Company vehicle.");
+	            OnDuty[playerid] =1;
+
+	            format(string,sizeof(string),"[TAXI DUTY] %s(%d) is now on taxi duty. Call them with /taxi to get picked up at your location.",PlayerName(playerid),playerid);
+	            SendClientMessageToAll(COLOR_DARKOLIVEGREEN,string);
+
+	            format(string,sizeof(string),"3[TAXI DUTY] %s(%d) is now on taxi duty. Call them with /taxi to get picked up at your location.",PlayerName(playerid),playerid);
+				IRC_GroupSay(groupID,IRC_CHANNEL,string);
+				return 1;
+			}
+		}
+	}
+	if(oldstate == PLAYER_STATE_DRIVER && newstate == PLAYER_STATE_ONFOOT)
+	{
+	    if(OnDuty[playerid] == 1)
+	    {
+	        SendClientMessage(playerid,COLOR_ERROR,"You are now off duty. Enter a taxi vehicle again to go on duty.");
+			OnDuty[playerid] =0;
+			return 1;
+		}
+	}
+	if(newstate == PLAYER_STATE_ONFOOT)
+	{
+	    if(PayingTaxi[playerid] == 1)
+	    {
+	        PayingTaxi[playerid] =0;
+	        SendClientMessage(playerid,COLOR_ERROR,"You have left your taxi and have stopped paying the fare.");
+	        for(new i=0; i<MAX_PLAYERS; i++)
+	        {
+	            if(HasTaxiFare[i] == playerid)
+	            {
+	                HasTaxiFare[i] =-1;
+	                SendClientMessage(i,COLOR_ERROR,"Your taxi fare has left your vehicle and has stopped paying your fare.");
+	                return 1;
+				}
+			}
+			return 1;
+		}
+	}
+	return 1;
+}
+
+public OnPlayerEnterCheckpoint(playerid)
+{
+	return 1;
+}
+
+public OnPlayerLeaveCheckpoint(playerid)
+{
+	return 1;
+}
+
+public OnPlayerEnterRaceCheckpoint(playerid)
+{
+	return 1;
+}
+
+public OnPlayerLeaveRaceCheckpoint(playerid)
+{
+	return 1;
+}
+
+public OnRconCommand(cmd[])
+{
+	return 1;
+}
+
+public OnPlayerRequestSpawn(playerid)
+{
+	if(gTeam[playerid] == TEAM_ARMY && GetPlayerScore(playerid) <= 499)
+	{
+		SendClientMessage(playerid, COLOR_RED, "You Must Have 500 Score to use this class");
+		return 0;
+	}
+	return 1;
+}
+
+public OnObjectMoved(objectid)
+{
+	return 1;
+}
+
+public OnPlayerObjectMoved(playerid, objectid)
+{
+	return 1;
+}
+
+public OnPlayerPickUpPickup(playerid, pickupid)
+{
+	if(pickupid == rhinopickup)
+	{
+	    ShowPlayerDialog(playerid, DIALOG_RHINO, DIALOG_STYLE_MSGBOX, "Drive Rhino", "while driving rhino it costs 1000$/sec", "Okay", "NO!");
+	}
+	if(pickupid == boxinggpickup)
+	{
+	    ShowPlayerDialog(playerid, DIALOG_BOXING, DIALOG_STYLE_MSGBOX, "Boxing", "Do you want to Box?", "Okay", "NO!");
+	}
+	return 1;
+}
+
+public OnPlayerPickUpDynamicPickup(playerid, pickupid)
+{
+	if(pickupid == rocketpickup)
+	{
+		SendClientMessageToAll(COLOR_RED,"A guy picked up the rocket launcher!");
+	}
+	return 1;
+}
+
+public OnVehicleMod(playerid, vehicleid, componentid)
+{
+	return 1;
+}
+
+public OnVehiclePaintjob(playerid, vehicleid, paintjobid)
+{
+	return 1;
+}
+
+public OnVehicleRespray(playerid, vehicleid, color1, color2)
+{
+	return 1;
+}
+
+public OnPlayerTakeDamage(playerid, issuerid, Float: amount, weaponid, bodypart)
+{
+	if(IsFrozen[playerid])
+	{
+	    new Float:health;
+	    GetPlayerHealth(playerid,health);
+	    SetPlayerHealth(playerid,health-amount);
+	}
+    if(issuerid != INVALID_PLAYER_ID)
+    {
+		if(gTeam[playerid] == TEAM_COP)
+		{
+		    IncreaseWantedLevel(issuerid, 2);
+		}
+    }
+    return 1;
+}
+
+public OnPlayerSelectedMenuRow(playerid, row)
+{
+	return 1;
+}
+
+public OnPlayerExitedMenu(playerid)
+{
+	return 1;
+}
+
+public OnPlayerInteriorChange(playerid, newinteriorid, oldinteriorid)
+{
+	return 1;
+}
+
+public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
+{
+    if(takingselfie[playerid] == 1)
+    {
+        if(PRESSED(KEY_ANALOG_RIGHT))
+        {
+            GetPlayerPos(playerid,lX[playerid],lY[playerid],lZ[playerid]);
+            static Float: n1X, Float: n1Y;
+            if(Degree[playerid] >= 360) Degree[playerid] = 0;
+            Degree[playerid] += Speed;
+            n1X = lX[playerid] + Radius * floatcos(Degree[playerid], degrees);
+            n1Y = lY[playerid] + Radius * floatsin(Degree[playerid], degrees);
+            SetPlayerCameraPos(playerid, n1X, n1Y, lZ[playerid] + Height);
+            SetPlayerCameraLookAt(playerid, lX[playerid], lY[playerid], lZ[playerid]+1);
+            SetPlayerFacingAngle(playerid, Degree[playerid] - 90.0);
+        }
+        if(PRESSED(KEY_ANALOG_LEFT))
+        {
+            GetPlayerPos(playerid,lX[playerid],lY[playerid],lZ[playerid]);
+            static Float: n1X, Float: n1Y;
+            if(Degree[playerid] >= 360) Degree[playerid] = 0;
+            Degree[playerid] -= Speed;
+            n1X = lX[playerid] + Radius * floatcos(Degree[playerid], degrees);
+            n1Y = lY[playerid] + Radius * floatsin(Degree[playerid], degrees);
+            SetPlayerCameraPos(playerid, n1X, n1Y, lZ[playerid] + Height);
+            SetPlayerCameraLookAt(playerid, lX[playerid], lY[playerid], lZ[playerid]+1);
+            SetPlayerFacingAngle(playerid, Degree[playerid] - 90.0);
+        }
+    }
+    return 1;
+}
+
+public OnRconLoginAttempt(ip[], password[], success)
+{
+	return 1;
+}
+
+public OnPlayerUpdate(playerid)
+{
+	return 1;
+}
+
+public OnPlayerStreamIn(playerid, forplayerid)
+{
+	return 1;
+}
+
+public OnPlayerStreamOut(playerid, forplayerid)
+{
+	return 1;
+}
+
+public OnVehicleStreamIn(vehicleid, forplayerid)
+{
+	return 1;
+}
+
+public OnVehicleStreamOut(vehicleid, forplayerid)
+{
+	return 1;
+}
+
+public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
+{
+	new string[128];
+    switch( dialogid )
+    {
+        case DIALOG_REGISTER:
+        {
+            if (!response) return Kick(playerid);
+            if(response)
+            {
+                if(!strlen(inputtext)) return ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT, ""COL_WHITE"Register",""COL_RED"You have entered an invalid password.\n"COL_WHITE"Type your password below to register a new account.","Register","Quit");
+                new INI:File = INI_Open(UserPath(playerid));
+                INI_SetTag(File,"data");
+                INI_WriteInt(File,"Password",udb_hash(inputtext));
+                INI_WriteInt(File,"Cash",0);
+                INI_WriteInt(File,"Admin",0);
+                INI_WriteInt(File,"Kills",0);
+                INI_WriteInt(File,"Deaths",0);
+                INI_WriteInt(File,"Score",0);
+                INI_WriteInt(File,"TSkill",0);
+                INI_WriteInt(File,"C4s",0);
+                INI_WriteInt(File,"Ropes",0);
+                INI_WriteInt(File,"Groove",0);
+                INI_WriteInt(File,"Traids",0);
+                INI_WriteInt(File,"Aztec",0);
+                INI_Close(File);
+            }
+        }
+
+        case DIALOG_LOGIN:
+        {
+            if ( !response ) return Kick ( playerid );
+            if( response )
+            {
+                if(udb_hash(inputtext) == PlayerInfo[playerid][pPass])
+                {
+                    INI_ParseFile(UserPath(playerid), "LoadUser_%s", .bExtra = true, .extra = playerid);
+                    GivePlayerMoney(playerid, PlayerInfo[playerid][pCash]);
+                    SetPlayerScore(playerid,PlayerInfo[playerid][pScore]);
+                    ShowPlayerDialog(playerid, DIALOG_SUCCESS_2, DIALOG_STYLE_MSGBOX,""COL_WHITE"Success!",""COL_GREEN"You have successfully logged in!","Ok","");
+                }
+                else
+                {
+                    ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_INPUT,""COL_WHITE"Login",""COL_RED"You have entered an incorrect password.\n"COL_WHITE"Type your password below to login.","Login","Quit");
+                }
+                return 1;
+            }
+        }
+        
+        case DIALOG_robstackwell:
+	    {
+		    if(!response) return 1;
+	        if(response)
+	        {
+	            if(gTeam[playerid] == TEAM_COP)
+    			{
+    			    SendClientMessage(playerid, COLOR_RED," [ERROR]You are a cop." );
+    			    return 1;
+				}
+	            if(stackwellrobbedrecently >1)
+	            {
+	            SendClientMessage(playerid, COLOR_RED," [ERROR]Stack Well has been robbed recently" );
+	            return 1;
+	            }
+
+	            if(stackwellrobbedrecently <=1)
+	            {
+	            stackwellrobbedrecently =180;
+	            SetPlayerPos(playerid,379.1041,-115.8127,1001.4922);
+	            SetPlayerFacingAngle(playerid,277.5683);
+	            ApplyAnimation(playerid, "ROB_BANK", "CAT_Safe_Rob", 4.1, 1, 0, 0, 1, 1, 1);
+	            ROBBING_STACKWELL[playerid] = 30;
+	            }
+	            return 1;
+			}
+        }
+        case DIALOG_VIRTUALWORLD:
+        {
+            if(!response) return 1;
+            if(response)
+            {
+                if(GetPlayerWantedLevel(playerid) == 0)
+				{
+	                SetPlayerVirtualWorld(playerid, 3);
+	                SendClientMessage(playerid, COLOR_GREEN, "You Have Entered the VIRTUAL FUN WORLD <3!!");
+           		    format(string,sizeof(string),"1[SERVER MYSTERY] %s(%s) Has Entered the virtual World.",PlayerName(playerid),playerid);
+		    		IRC_GroupSay(groupID,IRC_CHANNEL,string);
+	                PlayerVirtualWorld[playerid] = 1;
+	                return 1;
+
+				}
+				SendClientMessage(playerid,COLOR_RED,"You are wanted.");
+				return 1;
+			}
+		}
+		case DIALOG_VIRTUALWORLD_1:
+		{
+		if(!response) return 1;
+  		if(response)
+  		{
+  		    SetPlayerVirtualWorld(playerid, 0);
+  		    SendClientMessage(playerid, COLOR_RED, "You Have Exit the VIRTUAL FUN WORLD , cya later");
+    		PlayerVirtualWorld[playerid] = 0;
+    		format(string,sizeof(string),"1[SERVER MYSTERY] %s(%s) Has Left the virtual World.",PlayerName(playerid),playerid);
+    		IRC_GroupSay(groupID,IRC_CHANNEL,string);
+    		return 1;
+		}
+		}
+		case DIALOG_ZIP:
+		{
+		if(!response) return 1;
+		if(response)
+		{
+		    ROBBING_ZIP[playerid] = 30;
+			return 1;
+		}
+		}
+		case DIALOG_RHINO:
+		{
+		if(!response) return 1;
+		if(response)
+		{
+		    RHINO = AddStaticVehicle(432,2094.9404,1668.0839,10.7978,143.3327,45,23); // RHINO
+		    DRIVING_RHINO[playerid] = 1;
+		    PutPlayerInVehicle(playerid, RHINO, 0);
+		    if (GetPlayerMoney(playerid) < 200) return SendClientMessage(playerid, COLOR_RED,"You don't have enough money!");
+		    return 1;
+		}
+		}
+		case DIALOG_SKILLS:
+		{
+		if(response)
+		{
+		    switch(listitem)// Checking which listitem was selected
+        	{
+        	    case 0:// The first item listed
+        	    {
+                 	SendClientMessage(playerid, 0xFFFFFF, "You are a terrorist start by blowing cars");
+                 	SendClientMessage(playerid, 0xFFFFFF, "using /blowcar");
+                    gTeam[playerid] = TEAM_TERRO;
+                    ShowPlayerDialog(playerid, DIALOG_GANGS, DIALOG_STYLE_LIST, "Gangs", ""COL_GREEN"Groove Street Ogs \n Traids \n {2EFEF7} Varrios Los Aztecas \n I dont have any permission for gangs", "Ok", "Cancel");
+                    return 1;
+				}
+				case 1:
+				{
+                 	SendClientMessage(playerid, 0xFFFFFF, "You are a kidnapper. kidnap players");
+                 	SendClientMessage(playerid, 0xFFFFFF, "using /kidnap <id>");
+                 	gTeam[playerid] = TEAM_KIDNAP;
+                 	ShowPlayerDialog(playerid, DIALOG_GANGS, DIALOG_STYLE_LIST, "Gangs", ""COL_GREEN"Groove Street Ogs \n Traids \n {2EFEF7} Varrios Los Aztecas \n I dont have any permission for gangs", "Ok", "Cancel");
+                 	return 1;
+				}
+				case 2:
+				{
+                 	SendClientMessage(playerid, 0xFFFFFF, "You are a Rapeist players");
+                 	SendClientMessage(playerid, 0xFFFFFF, "using /rape <id>");
+                 	gTeam[playerid] = TEAM_RAPIST;
+                 	ShowPlayerDialog(playerid, DIALOG_GANGS, DIALOG_STYLE_LIST, "Gangs", ""COL_GREEN"Groove Street Ogs \n Traids \n {2EFEF7} Varrios Los Aztecas \n I dont have any permission for gangs", "Ok", "Cancel");
+                 	return 1;
+				}
+			}
+		}
+		}
+		case DIALOG_BOXING:
+		{
+		if(response)
+		{
+		    new msg[128];
+			SendClientMessage(playerid,COLOR_RED,"You Have Joined the Boxing :3");
+			IsBoxing[playerid] = 1;
+		    new Random = random(sizeof(RandomBoxing));
+		    SetPlayerPos(playerid, RandomBoxing[Random][0], RandomBoxing[Random][1], RandomBoxing[Random][2]);
+	        ResetPlayerWeapons(playerid);
+         	format(msg, sizeof(msg), "%s Has Joined the boxing fight!", PlayerName(playerid));
+			IRC_GroupSay(groupID, IRC_CHANNEL, msg);
+			SendClientMessageToAll(COLOR_WHITE, msg);
+		}
+		}
+
+		case DIALOG_SEVENROB:
+		{
+		if(response)
+		{
+		    switch(listitem)// Checking which listitem was selected
+        	{
+        	    case 0:
+        	    {
+        	        if(GetPlayerMoney(playerid) <= 500)
+        	        {
+        	        SendClientMessage(playerid,COLOR_RED,"You dont have enough money to buy this item");
+        	        return 1;
+        	        }
+        	        PlayerInfo[playerid][HasRope] ++;
+        	        GivePlayerMoney(playerid,-500);
+ 				    SendClientMessage(playerid,COLOR_GREEN,"You Have Purchased 1 Rope . now you can kidnap players ");
+       				format(string, sizeof(string), "You have %d Rope Remaining", PlayerInfo[playerid][HasRope]);
+       				SendClientMessage(playerid,COLOR_WHITE, string);
+        	        
+        	        return 1;
+				}
+				case 1:
+				{
+    				if(GetPlayerMoney(playerid) <= 200)
+        	        {
+        	        SendClientMessage(playerid,COLOR_RED,"You dont have enough money to buy this item");
+        	        return 1;
+        	        }
+				    HasWine[playerid] ++;
+				    SendClientMessage(playerid,COLOR_GREEN,"You Have Purchased 1 Wine . use /backpack to use wine");
+       				format(string, sizeof(string), "You have %d Wine Remaining", HasWine[playerid]);
+					SendClientMessage(playerid,COLOR_WHITE, string);
+				    GivePlayerMoney(playerid,-200);
+				    return 1;
+				}
+				case 2:
+				{
+					if(GetPlayerMoney(playerid) <= 200)
+        	        {
+        	        SendClientMessage(playerid,COLOR_RED,"You dont have enough money to buy this item");
+        	        return 1;
+        	        }
+        	        HasCigar[playerid] ++;
+	    			SendClientMessage(playerid,COLOR_GREEN,"You Have Purchased 1 cigar . use /backpack to use cigar");
+       				format(string, sizeof(string), "You have %d cigar Remaining", HasCigar[playerid]);
+					SendClientMessage(playerid,COLOR_WHITE, string);
+					return 1;
+				}
+				case 3:
+				{
+				    if(gTeam[playerid] == TEAM_COP || gTeam[playerid] == TEAM_ARMY)
+				    {
+				        SendClientMessage(playerid,COLOR_RED,"[ERROR]In case you didnt notice you are a gouverment officer");
+				        return 1;
+					}
+					ROBBING_SEVEN[playerid] = 30;
+					return 1;
+				}
+				
+			}
+		}
+		}
+		case DIALOG_BACKPACK:
+		{
+		if(response)
+		{
+		    switch(listitem)// Checking which listitem was selected
+        	{
+        	    case 1:
+        	    {
+        	        if(HasWine[playerid] <= 0)
+        	        {
+        	            SendClientMessage(playerid,COLOR_RED,"You dont have any wine.");
+        	            return 1;
+					}
+					SetPlayerSpecialAction(playerid,SPECIAL_ACTION_DRINK_WINE);
+        	        HasWine[playerid] --;
+        	        SendClientMessage(playerid,COLOR_GREEN,"You have used a wine");
+        	        return 1;
+				}
+				case 2:
+				{
+				if(HasCigar[playerid] <= 0)
+				{
+				    SendClientMessage(playerid,COLOR_RED,"You Dont Have any Cigar");
+				    return 1;
+				}
+				SendClientMessage(playerid,COLOR_GREEN,"You have used a cigar");
+				SetPlayerSpecialAction(playerid,SPECIAL_ACTION_SMOKE_CIGGY);
+	        	HasCigar[playerid] --;
+				}
+				
+			}
+		}
+		}
+		case DIALOG_TERRO:
+		{
+		if(response)
+		{
+		    switch(listitem)
+		    {
+		        case 0:
+		        {
+		            if(GetPlayerMoney(playerid) <= 1000)
+		            {
+		                SendClientMessage(playerid,COLOR_ERROR,"You dont have enogh money");
+		                return 1;
+					}
+		            PlayerInfo[playerid][HasC4] ++;
+		            GivePlayerMoney(playerid,-1000);
+		            SendClientMessage(playerid,COLOR_GREEN,"[Purchase]You have bought a c4 for $1000");
+				}
+			}
+		}
+		}
+		case DIALOG_GANGS:
+		{
+		if(response)
+		{
+		    switch(listitem)
+		    {
+		        case 0:
+		        {
+		            if(PlayerInfo[playerid][Groove] == 0)
+		            {
+		                SendClientMessage(playerid,COLOR_RED,"[ERROR]You dont have permissions to use this gang");
+					}
+				}
+				case 1:
+				{
+		            if(PlayerInfo[playerid][Traids] == 0)
+		            {
+		                SendClientMessage(playerid,COLOR_RED,"[ERROR]You dont have permissions to use this gang");
+					}
+				}
+				case 2:
+				{
+		            if(PlayerInfo[playerid][Aztec] == 0)
+		            {
+		                SendClientMessage(playerid,COLOR_RED,"[ERROR]You dont have permissions to use this gang");
+					}
+				}
+			}
+		}
+		}
+			
+	}
+ 	return 1;
+}
+
+public OnPlayerClickPlayer(playerid, clickedplayerid, source)
+{
+	return 1;
+}
+
+////////////////////////////////////COMMANDS HERE//////////////////////////////////////////////////////////////
+
+
+CMD:commands(playerid, params[])
+{
+    #pragma unused params
+	if(gTeam[playerid] == TEAM_COP)
+	{
+	ShowPlayerDialog(playerid, DIALOG_CMDS_COP, DIALOG_STYLE_MSGBOX, "Commands", "/cuff , /arrest, /gcommands", "Close", "");
+	}
+	if(gTeam[playerid] == TEAM_KIDNAP)
+	{
+	ShowPlayerDialog(playerid, DIALOG_CMDS_CIVIL, DIALOG_STYLE_MSGBOX, "Commands", " /kidnap <playerid>", "Close", "");
+	}
+	if(gTeam[playerid] == TEAM_TERRO)
+	{
+	ShowPlayerDialog(playerid, DIALOG_CMDS_CIVIL, DIALOG_STYLE_MSGBOX, "Commands", " /blowcar \n /pb - plant bomb <LEVEL 20> Terrorist only \n /detonatebomb - Blow the c4 planted with /pb <level 20> terro only", "Close", "");
+	}
+	return 1;
+}
+
+CMD:suicide(playerid , params[])
+{
+    #pragma unused params
+    new name[MAX_PLAYER_NAME+1], string[24+MAX_PLAYER_NAME+1];
+    GetPlayerName(playerid, name, sizeof(name));
+    format(string, sizeof(string), "%s has Commited a suicide . darn him.", name);
+    SendClientMessageToAll(COLOR_RED, string);
+    SetPlayerHealth(playerid, 0);
+    return 1;
+}
+
+CMD:heatmeup(playerid, params[])
+{
+    #pragma unused params
+    SetPlayerWantedLevel(playerid, 6);
+    SendClientMessage(playerid, 0xFF0000FF, "Wanted Level: 6");
+    return 1;
+}
+
+CMD:mystats(playerid, params[])
+{
+	#pragma unused params
+	new str[512];
+    format(str, sizeof(str), "%sSkinID: %d\n", str, GetPlayerSkin(playerid));
+    format(str, sizeof(str), "%sScore: %d\n", str, GetPlayerScore(playerid));
+    format(str, sizeof(str), "%sKills: %d\n", str, PlayerInfo[playerid][pKills]);
+    format(str, sizeof(str), "%sDeaths: %d\n", str, PlayerInfo[playerid][pDeaths]);
+    format(str, sizeof(str), "%sMoney: $%d\n", str, GetPlayerMoney(playerid));
+    format(str, sizeof(str), "%sAdminLevel: %d\n", str, PlayerInfo[playerid][AdminLevel]);
+    format(str, sizeof(str), "%sTerrorist Skill: %d\n", str, PlayerInfo[playerid][TSKILL]);
+    format(str, sizeof(str), "%sKidnapper Skill: %d\n", str, PlayerInfo[playerid][KSKILL]);
+    ShowPlayerDialog(playerid, 8435, DIALOG_STYLE_MSGBOX, "Player Statistics", str, "Close", "");
+    return 1;
+}
+
+CMD:cuff(playerid, params[])//This is will create you cmd so you can continue your codes.
+{
+    new targetid;//this defines the id of the player you want to cuff((playerid id your id and the target id that I defined it the id of the player you want to cuff))
+    if(sscanf(params, "u", targetid)) return SendClientMessage(playerid, -1, "[USAGE]: /cuff [Part of Name/Player ID]");
+	if(IsKidnapped[playerid] == 1)
+	{
+	    SendClientMessage(playerid, COLOR_RED, "[ERROR] You Are kidnapped");
+	    return 1;
+	}
+    if(PlayerVirtualWorld[playerid] == 1)
+	{
+		SendClientMessage(playerid, COLOR_RED, "[ERROR] You Cannot use this command when in Virtual mode");
+		return 1;
+	}
+   	if(gTeam[playerid] != TEAM_COP && gTeam[playerid] != TEAM_ARMY)
+	{
+	    SendClientMessage(playerid, COLOR_RED,"[ERROR] Excuse me , Are u a cop? or a Criminal? O.o");
+	    return 1;
+	}
+	if(targetid == playerid)
+	{
+	    SendClientMessage(playerid, COLOR_RED,"[ERROR] Excuse me , You cuffing yourself?");
+	    return 1;
+	}
+	if(gTeam[targetid] == TEAM_COP)
+	{
+	    SendClientMessage(playerid, COLOR_RED,"[ERROR] Excuse me , so u want to cuff A COP!?");
+	    return 1;
+	}
+	if(GetPlayerState(playerid) == PLAYER_STATE_DRIVER || GetPlayerState(playerid) == PLAYER_STATE_PASSENGER)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot cuff someone while in a vehicle. Exit the vehicle first.");
+	    return 1;
+	}
+	if(GetPlayerState(targetid) == PLAYER_STATE_DRIVER || GetPlayerState(targetid) == PLAYER_STATE_PASSENGER)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot cuff someone while they are in a vehicle. Get them to exit the vehicle first.");
+	    return 1;
+	}
+	if(IsPlayerConnected(targetid))//this will check that if the player you want to cuff is connected to the server or not.
+        {
+            new Float:x, Float:y, Float:z;//these are the defines of your x,y and z position.
+            GetPlayerPos(playerid, x, y, z);//this will store your position to be used in the following codes.((this stores the your x,y, and z position in to the variables we created.))
+            if(IsPlayerInRangeOfPoint(targetid, 5.0, x, y, z))//this will check that if the player you want to cuff is near you or not.
+                {
+                    new str[128];//this it the define for the string you will format further.((str means string.You can also change it to string but this seems to be easy.))
+                    new name[MAX_PLAYER_NAME];//this is the variable you created to store the your name.
+                    GetPlayerName(playerid, name, sizeof(name));//this will get your name and store it in the variable you defines as name.
+                    new target[MAX_PLAYER_NAME];//this is the variable you created to store the name of the player you want to cuff.
+                    GetPlayerName(targetid, target, sizeof(target));//this will get the name of the person you want to cuff and will store it into a variable we defined as target.
+                    format(str, sizeof(str), "INFO: You have cuffed %s!",target);//explained at the end of the tutorial.
+                    SendClientMessage(playerid, 0xE01B1B, str);//this will send the formated message to you that you created before.
+                    format(str, sizeof(str), "WARNING: You have been cuffed by %s!",name);//explained at the end of the tutorial.
+                    SendClientMessage(targetid, 0xE01B1B, str);//this will send the formated message to the player you cuffed.
+                    SetPlayerAttachedObject(targetid, 0, 19418, 6, -0.011000, 0.028000, -0.022000, -15.600012, -33.699977,-81.700035, 0.891999, 1.000000, 1.168000);//this will set the object cuffs at the hand of the player you want to cuff.
+                    SetPlayerSpecialAction(targetid,SPECIAL_ACTION_CUFFED);//this will set players hand backwards.
+                    IsCuffed[targetid] = 1;
+                    Anticuff[targetid] = 50;
+                    TogglePlayerControllable(targetid, 0);
+                    SetPlayerHealth(targetid,100);
+                    return 1;
+                }
+
+        }
+    return 1;
+}
+
+CMD:uncuff(playerid, params[])//sfcs cmd.
+{
+
+        new targetid;//this defines the id of the player you want to cuff((playerid id your id and the target id that I defined it the id of the player you want to cuff))
+        if(sscanf(params, "u", targetid)) return SendClientMessage(playerid, -1, "[USAGE]: /uncuff [Part of Name/Player ID]");
+        if(PlayerVirtualWorld[playerid] == 1)
+		{
+		SendClientMessage(playerid, COLOR_RED, "[ERROR] You Cannot use this command when in Virtual mode");
+		return 1;
+		}
+       	if(gTeam[playerid] == TEAM_TERRO || gTeam[playerid] == TEAM_KIDNAP || gTeam[playerid] == TEAM_RAPIST)
+		{
+	    SendClientMessage(playerid, COLOR_RED," Excuse me , Are u a cop? or a Criminal? O.o");
+	    return 1;
+		}
+        if(IsPlayerConnected(targetid))//this will check that if the player you want to cuff is connected to the server or not.
+        {
+            new Float:x, Float:y, Float:z;//these are the defines of your x,y and z position.
+           	GetPlayerPos(playerid, x, y, z);//this will store your position to be used in the following codes.((this stores the your x,y, and z position in to the variables we created.))
+            if(IsPlayerInRangeOfPoint(targetid, 5.0, x, y, z))//this will check that if the player you want to cuff is near you or not.
+                   {
+                       if(!SetPlayerAttachedObject(targetid, 0, 19418, 6, -0.011000, 0.028000, -0.022000, -15.600012, -33.699977,-81.700035, 0.891999, 1.000000, 1.168000))return SendClientMessage(playerid,-1,"ERROR: The player is not cuffed!");//this will check that if the player is not cuffed and you are trying to apply this cmd,this will send him a error message.
+                       SetPlayerSpecialAction(targetid,SPECIAL_ACTION_NONE);//this will remove the players cuffs and his arms will go normal.
+                       RemovePlayerAttachedObject(targetid, 0);
+                   	   new str[512];//this it the define for the string you will format further.((str means string.You can also change it to string but this seems to be easy.))
+                   	   new name[MAX_PLAYER_NAME];//this is the variable you created to store the your name.
+         			   GetPlayerName(playerid, name, sizeof(name));//this will get your name and store it in the variable you defines as name.
+             		   new target[MAX_PLAYER_NAME];//this is the variable you created to store the name of the player you want to cuff.
+                       GetPlayerName(targetid, target, sizeof(target));//this will get the name of the person you want to cuff and will store it into a variable we defined as target.
+                       format(str, sizeof(str), "INFO: You have uncuffed %s!",target);//explained at the end of the tutorial.
+                       SendClientMessage(playerid, 0xE01B1B, str);//will send the formated message to you that you created above.
+                       format(str, sizeof(str), "WARNING: You have been uncuffed by %s!",name);//explained bellow.
+                       SendClientMessage(targetid, 0xE01B1B, str);//will send the formated message to the player you want to cuff that you created above.
+                       IsCuffed[targetid] =0;
+                       Anticuff[playerid] =0;
+                       TogglePlayerControllable(targetid, 1);
+					   SetPlayerHealth(targetid,100);
+                       return 1;
+                }
+
+        }
+        return 1;
+}
+
+CMD:arrest(playerid, params[])
+{
+    new targetid;
+   	if(gTeam[playerid] == TEAM_TERRO || gTeam[playerid] == TEAM_KIDNAP || gTeam[playerid] == TEAM_RAPIST)
+	{
+	    SendClientMessage(playerid, COLOR_RED," Excuse me , Are u a cop? or a Criminal? O.o");
+	    return 1;
+	}
+    if(PlayerVirtualWorld[playerid] == 1)
+	{
+		SendClientMessage(playerid, COLOR_RED, "[ERROR] You Cannot use this command when in Virtual mode");
+		return 1;
+	}
+    if(sscanf(params, "u", targetid))
+    {
+        SendClientMessage(playerid,COLOR_WHITE,"{FF0000}[ERROR]: {FFFFFF}USAGE: /ar (Player Name/ID)");
+        return 1;
+    }
+	if(targetid == playerid)
+	{
+	    SendClientMessage(playerid, COLOR_RED,"[ERROR] Excuse me , You arresting yourself?");
+	    return 1;
+	}
+	if(gTeam[targetid] == TEAM_COP)
+	{
+	    SendClientMessage(playerid, COLOR_RED,"[ERROR] Excuse me , so u want to arrest A COP!?");
+	    return 1;
+	}
+    if(IsCuffed[targetid] == 0)
+    {
+        SendClientMessage(playerid, COLOR_RED,"[ERROR]HE MUST BE CUFFED");
+        return 1;
+	}
+ 	if(GetDistanceBetweenPlayers(playerid, targetid) > 10)
+    {
+        SendClientMessage(playerid, COLOR_RED,"[ERROR]HE IS TOO FAR");
+        return 1;
+	}
+	if(GetPlayerWantedLevel(targetid) == 0)
+	{
+	    SendClientMessage(playerid,COLOR_RED,"[ERROR] HE IS NOT WANTED]");
+	    return 1;
+	}
+	if(GetPlayerState(targetid) == PLAYER_STATE_DRIVER || GetPlayerState(playerid) == PLAYER_STATE_PASSENGER)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot arrest someone while in a vehicle. Exit the vehicle first.");
+	    return 1;
+	}
+	if(GetPlayerState(targetid) == PLAYER_STATE_DRIVER || GetPlayerState(targetid) == PLAYER_STATE_PASSENGER)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot arrest someone while they are in a vehicle. Get them to exit the vehicle first.");
+	    return 1;
+	}
+	if(IsCuffed[targetid] == 1)
+	{
+	    new Random = random(sizeof(RandomJailSpawns));
+	    new string[128], pName[MAX_PLAYER_NAME];
+		GetPlayerName(playerid,pName,MAX_PLAYER_NAME);
+		new sstring[128], ppName[MAX_PLAYER_NAME];
+		GetPlayerName(targetid,ppName,MAX_PLAYER_NAME);
+	    SetPlayerPos(targetid, RandomJailSpawns[Random][0], RandomJailSpawns[Random][1], RandomJailSpawns[Random][2]);
+	    SetPlayerFacingAngle(targetid, RandomJailSpawns[Random][3]);
+	    JailTime[targetid] = 60;
+	    SetPlayerInterior(targetid, 3);
+	    TextDrawShowForPlayer(targetid,JailTimerr[targetid]);
+		format(string,sizeof string,"%s has been arrested by %s and sent to jail for 60seconds",ppName,pName);
+		SendClientMessageToAll(COLOR_RED,string);
+        GivePlayerMoney(playerid,15000);
+        format(sstring,sizeof string,"Thanks For Arresting %s , Officer",ppName);
+        SendClientMessage(playerid, COLOR_BLUE, sstring);
+        SetPlayerWantedLevel(targetid, 0);
+        TogglePlayerControllable(targetid, 1);
+        SetPlayerSpecialAction(targetid,SPECIAL_ACTION_NONE);//this will remove the players cuffs and his arms will go normal.
+        RemovePlayerAttachedObject(targetid, 0);
+        SetPlayerHealth(targetid, 100);
+        GivePlayerScore(playerid, 1);
+        IsCuffed[targetid] = 0;
+        Anticuff[playerid] =0;
+  		format(string,sizeof(string),"7[POLICE ACTION]Officer %s(%d) has sent the criminal %s(%d) to the Prison.",PlayerName(playerid),playerid,PlayerName(targetid),targetid);
+    	IRC_GroupSay(groupID,IRC_CHANNEL,string);
+		return 1;
+	}
+	return 1;
+}
+		    
+CMD:adsetlevel(playerid ,params[])
+{
+	new targetid;
+	new cmdreason;
+ 	if(sscanf(params,"ui",targetid,cmdreason))
+    {
+        SendClientMessage(playerid,COLOR_WHITE,"{FF0000}[ERROR]: {FFFFFF}USAGE: /ad_setlevel (Player Name/ID) (level)");
+        return 1;
+    }
+    if(PlayerInfo[playerid][AdminLevel] < 1)
+    {
+        SendClientMessage(playerid, COLOR_RED," Bro you are not ADMIN!");
+		return 1;
+	}
+	if(PlayerInfo[targetid][AdminLevel] == cmdreason)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"the player is already at that Administrator level");
+	    return 1;
+	}
+	if(playerid == targetid)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot set your own Administrator level. You are already the highest level.");
+	    return 1;
+	}
+	
+	SendClientMessage(targetid,COLOR_BLUE,"Your admin level has been changed by the Server Owner. To see your new commands type /adcmds.");
+	PlayerInfo[targetid][AdminLevel] = cmdreason;
+	return 1;
+}
+
+CMD:gcommands(playerid ,params[])
+{
+	#pragma unused params
+    if(PlayerVirtualWorld[playerid] == 0)
+	{
+		SendClientMessage(playerid, COLOR_GREEN, ". /vehicle .");
+		return 1;
+	}
+	ShowPlayerDialog(playerid, DIALOG_gcmds, DIALOG_STYLE_MSGBOX, "Commands", "/suicide /stat /rob /kiss ", "Close", "");
+	return 1;
+}
+
+CMD:robthis(playerid, params[])
+{
+    #pragma unused params
+    if(PlayerVirtualWorld[playerid] == 1)
+	{
+		SendClientMessage(playerid, COLOR_RED, "[ERROR] You Cannot use this command when in Virtual mode");
+		return 1;
+	}
+    if(gTeam[playerid] == TEAM_COP)
+	{
+	    SendClientMessage(playerid, COLOR_RED," Excuse me , Are u a cop? or a Criminal? O.o");
+	    return 1;
+	}
+    if(IsPlayerInRangeOfPoint(playerid, 2.0, -104.9387,-8.6849,1000.7188))
+    {
+    	if(sexshoprobbedrecently >=1)
+		{
+			SendClientMessage(playerid, COLOR_RED, "Sex Shop has been robbed recently");
+			return 1;
+		}
+		ROBBING_SEXSHOP[playerid] = 30;
+		sexshoprobbedrecently =180;
+
+	}
+	if(IsPlayerInRangeOfPoint(playerid, 2.0, -201.2237,-42.7339,1002.2734))
+	{
+	    if(tatoorobbedrecently >=1)
+	    {
+	        SendClientMessage(playerid, COLOR_RED, "Tatoo Shop has been robbed recently");
+	        return 1;
+		}
+		ROBBING_TATOO[playerid] = 30;
+		tatoorobbedrecently =180;
+	}
+	if(IsPlayerInRangeOfPoint(playerid, 2.0, 370.6909,-7.0572,1001.8589))
+	{
+	    if(cbellrobbedrecently >=1)
+	    {
+	        SendClientMessage(playerid, COLOR_RED, "Clukin Bell has been robbed recently");
+	        return 1;
+		}
+		ROBBING_CBELL[playerid] = 30;
+		cbellrobbedrecently = 180;
+	}
+	return 1;
+}
+
+CMD:bc(playerid, params[])
+{
+    #pragma unused params
+    new string [128];
+   	new crand = random(100);
+    if(PlayerVirtualWorld[playerid] == 1)
+	{
+		SendClientMessage(playerid, COLOR_RED, "[ERROR] You Cannot use this command when in Virtual mode");
+		return 1;
+	}
+   	if(IsCuffed[playerid] == 0)
+   	{
+		SendClientMessage(playerid, COLOR_RED, "[ERROR]You Are Not Cuffed");
+		return 1;
+	}
+	if(crand <= 30)
+	{
+ 	SendClientMessage(playerid, COLOR_RED, "[ERROR]Your attemp to breakcuffs Failed");
+	HasbcRecently[playerid] = 120;
+	return 1;
+	}
+	if(HasbcRecently[playerid] >= 1)
+	{
+	    SendClientMessage(playerid, COLOR_RED, "[ERROR]You had Attempted / Broken cuffs recently. plz wait ");
+	    return 1;
+	}
+	
+ 	if(IsCuffed[playerid] == 1&& crand > 30)
+	{
+	    SendClientMessage(playerid, COLOR_RED, "[Success]You Broke your Cuffs! RUN!");
+     	SetPlayerSpecialAction(playerid,SPECIAL_ACTION_NONE);//this will remove the players cuffs and his arms will go normal.
+       	RemovePlayerAttachedObject(playerid, 0);
+       	IsCuffed[playerid] =0;
+        TogglePlayerControllable(playerid, 1);
+        format(string,sizeof string,"%s has BROKEN HIS CUFFS AND IS ONCE AGAIN ON THE RUN",PlayerName(playerid));
+	    SendClientMessageToAll(COLOR_RED,string);
+	    HasbcRecently[playerid] = 120;
+	    Anticuff[playerid] = 0;
+	    return 1;
+	}
+	return 1;
+}
+
+CMD:ar(playerid,params[])
+{
+    return cmd_arrest(playerid, params);
+}
+
+CMD:vehicle(playerid, params[])
+{
+    #pragma unused params
+	if(PlayerVirtualWorld[playerid] == 0)
+	{
+		SendClientMessage(playerid, COLOR_RED, "[ERROR] You Cannot use this command when in normal mode");
+		return 1;
+	}
+	SendClientMessage(playerid, -1, "Click a vehicle to spawn it!");
+	ShowModelSelectionMenu(playerid, vehlist, "Vehicles - Click To Spawn");
+	return 1;
+}
+
+CMD:kiss(playerid, params[]) {
+        new id = strval(params);
+        if(!IsPlayerConnected(id)) return SendClientMessage(playerid, 0xFF0000, "ERROR: Player not connected!");
+        if(isnull(params)) return SendClientMessage(playerid, -1, "USAGE: /kiss [ID]");
+        new
+                Float:x,
+                Float:y,
+                Float:z
+        ;
+        GetPlayerPos(id, x, y, z);
+        if(ArePlayersFacing(playerid, id) && IsPlayerInRangeOfPoint(playerid, 1.5, x, y, z)) {
+            new
+                        string[128],
+                        aName[MAX_PLAYER_NAME],
+                        pName[MAX_PLAYER_NAME]
+                ;
+            GetPlayerName(playerid, aName, sizeof aName);
+            GetPlayerName(id, pName, sizeof pName);
+            ApplyAnimation(playerid, "KISSING", "Playa_Kiss_02", 10.0, 0, 0, 0, 0, 5000, 1);
+            ApplyAnimation(id, "KISSING", "Playa_Kiss_02", 10.0, 0, 0, 0, 0, 5000, 1);
+            format(string, sizeof string, "You just got kissed by %s!", aName);
+            SendClientMessage(id, -1, string);
+            format(string, sizeof string, "You just kissed %s!", pName);
+            SendClientMessage(playerid, -1, string);
+        }
+        else SendClientMessage(playerid, 0xFF0000, "ERROR: Player not in range or you are not facing the player!");
+        return 1;
+}
+
+
+CMD:pm(playerid, params[])
+{
+    new str[256], str2[256], id, Name1[MAX_PLAYER_NAME], Name2[MAX_PLAYER_NAME];
+    if(sscanf(params, "us", id, str2))
+    {
+        SendClientMessage(playerid, 0xFF0000FF, "Usage: /pm <id> <message>");
+        return 1;
+    }
+    if(!IsPlayerConnected(id)) return SendClientMessage(playerid, 0xFF0000FF, "ERROR: Player not connected");
+    if(playerid == id) return SendClientMessage(playerid, 0xFF0000FF, "ERROR: You cannot pm yourself!");
+    {
+        GetPlayerName(playerid, Name1, sizeof(Name1));
+        GetPlayerName(id, Name2, sizeof(Name2));
+        format(str, sizeof(str), "PM To %s(ID %d): %s", Name2, id, str2);
+        SendClientMessage(playerid, 0xFF0000FF, str);
+        format(str, sizeof(str), "PM From %s(ID %d): %s", Name1, playerid, str2);
+        SendClientMessage(id, 0xFF0000FF, str);
+    }
+    return 1;
+}
+
+CMD:blowcar(playerid,params[])
+{
+	#pragma unused params
+	new string[128];
+	if(gTeam[playerid] != TEAM_TERRO)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You must be a terrorist in order to blow up vehicles.");
+	    return 1;
+	}
+	if(!IsPlayerInAnyVehicle(playerid))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are not in any vehicle.");
+	    return 1;
+	}
+	if(BlewCarRecently[playerid] >= 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are tired from bombing plz wait");
+	    return 1;
+	}
+	if(PlayerInfo[playerid][HasC4] <= 0)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You Dont have any c4. buy it behind calliguas casino");
+	    return 1;
+	}
+	new pveh =GetPlayerVehicleID(playerid);
+	BlewCarRecently[playerid] = 120;
+    SendClientMessage(playerid,COLOR_ERROR,"C4 charges placed . NOW WHAT ARE U LOOKIN FOR?! RUN!");
+    VehicleInfo[pveh][bombed] =10;
+   	IncreaseWantedLevel(playerid,2);
+	GivePlayerScore(playerid,2);
+	format(string,sizeof(string),"[TERRORISM] %s(%d) Planted A bomb in their car",PlayerName(playerid),playerid);
+	SendClientMessageToAll(COLOR_RED,string);
+	if(PlayerInfo[playerid][TSKILL] < 40)
+	{
+	    PlayerInfo[playerid][TSKILL] ++;
+	    SendClientMessage(playerid,COLOR_LIGHTBLUE,"Your terrorist level has increased.");
+	}
+    return 1;
+}
+
+CMD:kidnap(playerid,params[])
+{
+    new string[128];
+	new IDD;
+	if(sscanf(params, "u", IDD))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /kidnap (Player Name/ID)");
+	    return 1;
+	}
+	if(IsCuffed[playerid] == 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot use this command while cuffed by law enforcement.");
+	    return 1;
+	}
+	if(IsKidnapped[playerid] == 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are kidnapped. You cannot use this command.");
+	    return 1;
+	}
+	if(PlayerInfo[playerid][HasRope] <= 0)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You do not have a rope to kidnap that person buy it from nearest 7 shop");
+		return 1;
+	}
+	if(IsKidnapped[IDD] == 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"He/She is kidnapped");
+	    return 1;
+	}
+	if(gTeam[playerid] != TEAM_KIDNAP)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"Command Restricted to Kidnappers only");
+	    return 1;
+	}
+	if(GetDistanceBetweenPlayers(playerid,IDD) > 4)
+	{
+	    format(string,sizeof(string),"%s(%d) is too far away. You cannot reach him to kidnap him.",PlayerName(IDD),IDD);
+	    SendClientMessage(playerid,COLOR_ERROR,string);
+	    return 1;
+	}
+	if(GetPlayerState(playerid) == PLAYER_STATE_DRIVER || GetPlayerState(playerid) == PLAYER_STATE_PASSENGER)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot kidnap someone while in a vehicle. Exit the vehicle first.");
+	    return 1;
+	}
+	if(GetPlayerState(IDD) == PLAYER_STATE_DRIVER || GetPlayerState(IDD) == PLAYER_STATE_PASSENGER)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot kidnap someone while they are in a vehicle. Get them to exit the vehicle first.");
+	    return 1;
+	}
+	if(playerid == IDD)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot kidnap yourself. lol?");
+	    return 1;
+	}
+	if(HasKidnappedRecently[playerid] >= 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are tired from your last kidnap. Please wait before kidnapping someone again.");
+	    return 1;
+	}
+	new crand = random(100);
+	if(crand <= 30)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"Kidnap attempt failed. The player slipped out of your grasp.");
+		return 1;
+	}
+	if(GetDistanceBetweenPlayers(playerid,IDD) <= 4 && crand > 30)
+	{
+	    SendClientMessage(playerid,COLOR_RED,"[[_Kidnapped Player_]]");
+	    format(string,sizeof(string),"You have grabbed %s(%d), tied them up with your rope and thrown them into your vehicle.",PlayerName(IDD),IDD);
+	    SendClientMessage(playerid,COLOR_RED,string);
+	    IncreaseWantedLevel(playerid,3);
+	    HasKidnappedRecently[playerid] =300;
+		GivePlayerScore(playerid,3);
+
+	    SendClientMessage(IDD,COLOR_RED,"[[_Kidnapped_]]");
+	    format(string,sizeof(string),"%s(%d) has tied you up and thrown you into their vehicle!.",PlayerName(playerid),playerid);
+	    SendClientMessage(IDD,COLOR_RED,string);
+	    PutPlayerInVehicle(IDD,LastVehicle[playerid],1);
+	    TogglePlayerControllable(IDD,0);
+	    IsKidnapped[IDD] =120;
+
+	    format(string,sizeof(string),"[KIDNAP] %s(%d) has tied %s(%d) up and thrown them into their vehicle!",PlayerName(playerid),playerid,PlayerName(IDD),IDD);
+	    SendClientMessageToAll(COLOR_RED,string);
+	    format(string,sizeof(string),"[KIDNAP] %s(%d) has tied %s(%d) up and thrown them into their vehicle!",PlayerName(playerid),playerid,PlayerName(IDD),IDD);
+	    IRC_GroupSay(groupID, IRC_CHANNEL, string);
+
+	    format(string,sizeof(string),"[POLICE RADIO] %s(%d) has tied %s(%d) up with rope and thrown them into their vehicle!",PlayerName(playerid),playerid,PlayerName(IDD),IDD);
+	    SendClientMessageToAllCops(string);
+	    PlayerInfo[playerid][HasRope] --;
+	    IsFrozen[IDD] = 1;
+	    PlayerInfo[playerid][KSKILL] ++;
+
+	    return 1;
+	}
+	return 1;
+}
+
+CMD:untie(playerid,params[])
+{
+	new string[128];
+	new ID;
+	if(sscanf(params, "u", ID))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /untie (Player Name/ID)");
+	    return 1;
+	}
+	if(IsKidnapped[playerid] == 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are kidnapped. You cannot use this command.");
+	    return 1;
+	}
+	if(playerid == ID)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot untie yourself.");
+	    return 1;
+	}
+	if(IsCuffed[playerid] == 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot use this command while cuffed by law enforcement.");
+	    return 1;
+	}
+	if(IsKidnapped[ID] == 0)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"This player is not kidnapped. You have no reason to untie them.");
+	    return 1;
+	}
+	format(string,sizeof(string),"You have untied %s(%d) from their rope and they are now free to go.",PlayerName(ID),ID);
+	SendClientMessage(playerid,COLOR_ERROR,string);
+
+	format(string,sizeof(string),"You have been untied by %s(%d) from your rope and you are now free to go.",PlayerName(playerid),playerid);
+	SendClientMessage(ID,COLOR_ERROR,string);
+	TogglePlayerControllable(ID,1);
+	IsKidnapped[ID] =0;
+	return 1;
+}
+
+CMD:taxi(playerid, params[])
+{
+    #pragma unused params
+    new string[128];
+   	if(gTeam[playerid] == TEAM_TAXI)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are a driver. Use your taxi vehicles to help yourself.");
+	    return 1;
+	}
+ 	new current_zone = player_zone[playerid];
+	SendClientMessage(playerid,COLOR_DEADCONNECT,"[[_Taxi Called_]]");
+	SendClientMessage(playerid,COLOR_FORESTGREEN,"You have called for a taxi. They are on their way.");
+
+	format(string,sizeof(string),"[TAXI CALL] %s(%d) has called for a taxi. Location: %s.",PlayerName(playerid),playerid,zones[current_zone][zone_name]);
+	SendClientMessageToAllDrivers(string);
+	return 1;
+}
+
+CMD:setprice(playerid,params[])
+{
+	new string[128];
+	new price;
+	if(sscanf(params, "i", price))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /setprice (Amount)");
+	    return 1;
+	}
+	if(gTeam[playerid] != TEAM_TAXI)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You Cannot use this command.");
+	    return 1;
+	}
+	SkillPrice[playerid] = price;
+	format(string,sizeof(string),"You have set your fare charge to: %i.",price);
+	SendClientMessage(playerid,COLOR_GREEN,string);
+	return 1;
+}
+
+CMD:check(playerid, params[])
+{
+	new string[128];
+	new ID;
+	if(sscanf(params, "u", ID))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /check <Player ID>");
+	    return 1;
+	}
+	if(gTeam[playerid] == TEAM_CIVIL || gTeam[playerid] == TEAM_KIDNAP || gTeam[playerid] == TEAM_TERRO ||
+	gTeam[playerid] == TEAM_TAXI)
+	{
+	    SendClientMessage(playerid, COLOR_RED, "You are not a cop to use this command");
+	    return 1;
+	}
+	if(GetPlayerDrunkLevel(ID) > 2000)
+	{
+        SendClientMessage(playerid, COLOR_RED, "The player is drunk");
+        IncreaseWantedLevel(ID, 2);
+       	format(string,sizeof(string),"[POLICE]Officer %s Has found that %s was drunk",PlayerName(playerid),PlayerName(ID));
+		SendClientMessageToAll(COLOR_BLUE,string);
+        return 1;
+	}
+	format(string,sizeof(string),"[POLICE]Officer %s Has Searched and found that %s was Clean!",PlayerName(playerid),PlayerName(ID));
+	SendClientMessageToAll(COLOR_BLUE,string);
+	return 1;
+}
+
+CMD:backpack(playerid,params[])
+{
+	#pragma unused params
+	new string[512];
+	format(string, sizeof(string), "Rope == "COL_GREEN"%d \n Wine == "COL_GREEN"%d \n Cigar == "COL_GREEN" %d ", PlayerInfo[playerid][HasRope], HasWine[playerid], HasCigar[playerid]);
+	ShowPlayerDialog(playerid, DIALOG_BACKPACK, DIALOG_STYLE_LIST, "Backpack", string, "Ok", "Close");
+	return 1;
+}
+
+CMD:me(playerid, params[])
+{
+    new string[128], action[100];
+    if(sscanf(params, "s[100]", action))
+    {
+        SendClientMessage(playerid, -1, "USAGE: /me [action]");
+        return 1;
+    }
+    else
+    {
+        format(string, sizeof(string), "* %s %s", PlayerName(playerid), action);
+        SendClientMessageToAll(COLOR_PINK,string);
+    }
+    return 1;
+}
+
+CMD:fire(playerid,params[])
+{
+	#pragma unused params
+	if(PlayerInfo[playerid][AdminLevel] == 0)
+	{
+	    return 1;
+	}
+    new Float:x, Float:y, Float:z, Float:a;
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid,a);
+    DestroyObjectCampfire(0);
+    CreateObjectCampfire(0, x,y,z,a);
+	return 1;
+}
+
+CMD:pb(playerid,params[])
+{
+    #pragma unused params
+
+   	if(gTeam[playerid] != TEAM_TERRO)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You must be a terrorist in order to plant c4s.");
+	    return 1;
+	}
+	if(BlewCarRecently[playerid] >= 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are tired from bombing plz wait");
+	    return 1;
+	}
+	if(PlayerInfo[playerid][HasC4] <= 0)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You Dont have any c4. buy it behind calliguas casino");
+	    return 1;
+	}
+	if(C4PLANTED[playerid] == 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You have already planted a bomb");
+	    return 1;
+	}
+	if(PlayerInfo[playerid][TSKILL] < 20)
+	{
+	    SendClientMessage(playerid,COLOR_LIGHTBLUE,"You Must have 20 Terrorist skill to use this command.");
+	    return 1;
+	}
+ 	new Float:x,Float:y,Float:z;
+    GetPlayerPos(playerid,x,y,z);
+ 	C4OBJECT[playerid] = CreateObject(1252, x, y, z, 0.0, 0.0, 96.0, 250.0); //Object will render at 250.0 units.
+	C4PLANTED[playerid] = 1;
+ 	return 1;
+}
+
+CMD:detonatebomb(playerid,params[])
+{
+	#pragma unused params
+	new Float:x,Float:y,Float:z;
+	if(gTeam[playerid] != TEAM_TERRO)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You must be a terrorist in order to blow c4s.");
+	    return 1;
+	}
+	if(C4PLANTED[playerid] == 0)
+	{
+ 		SendClientMessage(playerid,COLOR_ERROR,"You Have not planted any c4s.");
+	    return 1;
+   	}
+    GetObjectPos(C4OBJECT[playerid],x,y,z);
+    CreateExplosion(x, y, z, 7, 20.0);
+    C4PLANTED[playerid] = 0;
+    DestroyObject(C4OBJECT[playerid]);
+   	if(PlayerInfo[playerid][TSKILL] < 40)
+	{
+	    PlayerInfo[playerid][TSKILL] ++;
+	    SendClientMessage(playerid,COLOR_LIGHTBLUE,"Your terrorist level has increased.");
+	}
+    return 1;
+}
+
+CMD:tlevel(playerid,params[])
+{
+    #pragma unused params
+   	new string[512];
+	format(string, sizeof(string), "Your Terrorist Level = %d", PlayerInfo[playerid][TSKILL]);
+	ShowPlayerDialog(playerid, DIALOG_TSKILL, DIALOG_STYLE_MSGBOX, "Terrorist", string, "Ok", "Close");
+	return 1;
+}
+	
+CMD:rape(playerid,params[])
+{
+    new string[128];
+	new IDD;
+    new Float:HP;
+    GetPlayerHealth(playerid, HP);
+	if(sscanf(params, "u", IDD))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /rape (Player Name/ID)");
+	    return 1;
+	}
+	if(IsKidnapped[playerid] == 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are kidnapped. You cannot use this command.");
+	    return 1;
+	}
+	if(IsKidnapped[IDD] == 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"He/She is kidnapped");
+	    return 1;
+	}
+	if(gTeam[playerid] != TEAM_RAPIST)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"Command Restricted to Rapers only");
+	    return 1;
+	}
+	if(GetDistanceBetweenPlayers(playerid,IDD) > 4)
+	{
+	    format(string,sizeof(string),"%s(%d) is too far away. You cannot reach him to rape him/her.",PlayerName(IDD),IDD);
+	    SendClientMessage(playerid,COLOR_ERROR,string);
+	    return 1;
+	}
+	if(GetPlayerState(playerid) == PLAYER_STATE_DRIVER || GetPlayerState(playerid) == PLAYER_STATE_PASSENGER)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot rape someone while in a vehicle. Exit the vehicle first.");
+	    return 1;
+	}
+	if(GetPlayerState(IDD) == PLAYER_STATE_DRIVER || GetPlayerState(IDD) == PLAYER_STATE_PASSENGER)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot rape someone while they are in a vehicle. Get them to exit the vehicle first.");
+	    return 1;
+	}
+	if(playerid == IDD)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You cannot rape yourself. lol?");
+	    return 1;
+	}
+	if(HasRapedRecently[playerid] >= 1)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"You are tired from your last rape. Please wait before rapeing someone again.");
+	    return 1;
+	}
+	new crand = random(100);
+	if(crand <= 30)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"Rape attempt failed. The player slipped out of your grasp.");
+		return 1;
+	}
+	if(GetDistanceBetweenPlayers(playerid,IDD) <= 4 && crand > 30)
+	{
+	SetPlayerHealth(IDD, HP-10);
+	format(string, sizeof(string), "You Have Raped %s(%d) ", PlayerName(IDD),IDD);
+	SendClientMessage(playerid,COLOR_RED,string);
+	format(string, sizeof(string), "[RAPE]%s(%d) Has Grabbed and raped %s(%s) ", PlayerName(playerid),playerid,PlayerName(IDD),IDD);
+	SendClientMessageToAll(COLOR_RED,string);
+	PlayerInfo[playerid][RSKILL] ++;
+	return 1;
+	}
+	return 1;
+}
+
+CMD:blindfold(playerid,params[])
+{
+	new string[128];
+	new IDD;
+	if(sscanf(params, "u", IDD))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /blindfold <Player ID>");
+	    return 1;
+	}
+	if(IsKidnapped[IDD] == 0)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"He/She is not kidnapped");
+	    return 1;
+	}
+	if(GetDistanceBetweenPlayers(playerid,IDD) > 4)
+	{
+	    format(string,sizeof(string),"%s(%d) is too far away. You cannot reach him to blindfold him/her.",PlayerName(IDD),IDD);
+	    SendClientMessage(playerid,COLOR_ERROR,string);
+	    return 1;
+	}
+	if(PlayerInfo[playerid][KSKILL] < 20)
+	{
+        SendClientMessage(playerid,COLOR_ERROR,"You dont have enough kidnap level to Blindfold players");
+        return 1;
+	}
+ 	format(string,sizeof(string),"%s(%d) Has Blindfolded %s(%d) with a cloth.",PlayerName(IDD),IDD,PlayerName(playerid),playerid);
+ 	SendClientMessage(playerid,COLOR_ERROR,string);
+ 	TextDrawShowForPlayer(IDD, blackTD);
+	IsBlindfolded[IDD] = 1;
+	return 1;
+}
+
+CMD:removeblindfold(playerid,params[])
+{
+
+	new string [128];
+	new IDD;
+	if(sscanf(params, "u", IDD))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /removeblindfold <Player ID>");
+	    return 1;
+	}
+	if(IsBlindfolded[IDD] == 0)
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"He/She is not blindfolded");
+	    return 1;
+	}
+	if(GetDistanceBetweenPlayers(playerid,IDD) > 4)
+	{
+	    format(string,sizeof(string),"%s(%d) is too far away. You cannot reach him to remove blindfold from him/her.",PlayerName(IDD),IDD);
+	    SendClientMessage(playerid,COLOR_ERROR,string);
+	    return 1;
+	}
+	TextDrawHideForPlayer(IDD,blackTD);
+	return 1;
+}
+
+CMD:sevendebug(playerid,params[])
+{
+    #pragma unused params
+    ShowModelSelectionMenu(playerid, Seven, "Click to buy");
+    return 1;
+}
+
+
+CMD:setservertime(playerid,params[])
+{
+	if(PlayerInfo[playerid][AdminLevel] > 0)
+	{
+	    if(!strlen(params)) return
+		SendClientMessage(playerid, COLOR_BLUE, "Usage: /settime [Time(Hour)]") &&
+		SendClientMessage(playerid, COLOR_RED, "Function: Will set a specified Hour");
+		
+		new var = strval(params), string[128];
+		if(var > 24) return SendClientMessage(playerid, COLOR_RED, "ERROR: Invalid Hour!");
+		for(new i = 0; i < MAX_PLAYERS; i++)
+		{
+			if(IsPlayerConnected(i))
+			{
+				PlayerPlaySound(i,1057,0.0,0.0,0.0);
+			}
+		}
+		THrs= var;
+		format(string,sizeof(string),"|- Administrator \"%s\" has set all players Time to '%d:00' -|", PlayerName(playerid), var );
+		return SendClientMessageToAll(COLOR_PINK, string);
+	}
+	else return 0;
+}
+
+
+CMD:toggletag(playerid,params[])
+{
+    new Text3D:label1 = Create3DTextLabel("OWNER", COLOR_RED, 30.0, 40.0, 50.0, 40.0, 0);
+    new tagged[MAX_PLAYERS];
+    if(tagged[playerid] == 1)
+    {
+        Delete3DTextLabel(label1);
+        tagged[playerid] = 0;
+        return 1;
+	}
+	if(PlayerInfo[playerid][AdminLevel] == 1337)
+	{
+     	Attach3DTextLabelToPlayer(label1, playerid, 0.0, 0.0, 0.7);
+		tagged[playerid] = 1;
+     	return 1;
+	}
+	return 1;
+}
+
+CMD:selfie(playerid,params[])
+{
+		if(IsPlayerInAnyVehicle(playerid) == 1)
+		{
+		    SendClientMessage(playerid,COLOR_RED,"You Cannot take a selfie while in car!");
+		    return 1;
+		}
+        if(takingselfie[playerid] == 0)
+        {
+     			GetPlayerPos(playerid,lX[playerid],lY[playerid],lZ[playerid]);
+		        static Float: n1X, Float: n1Y;
+		        if(Degree[playerid] >= 360) Degree[playerid] = 0;
+		        Degree[playerid] += Speed;
+		        n1X = lX[playerid] + Radius * floatcos(Degree[playerid], degrees);
+		        n1Y = lY[playerid] + Radius * floatsin(Degree[playerid], degrees);
+		        SetPlayerCameraPos(playerid, n1X, n1Y, lZ[playerid] + Height);
+		        SetPlayerCameraLookAt(playerid, lX[playerid], lY[playerid], lZ[playerid]+1);
+		        SetPlayerFacingAngle(playerid, Degree[playerid] - 90.0);
+		        takingselfie[playerid] = 1;
+		        ApplyAnimation(playerid, "PED", "gang_gunstand", 4.1, 1, 1, 1, 1, 1, 1);
+		        TextDrawShowForPlayer(playerid,Textdraw2);
+                return 1;
+        }
+    	if(takingselfie[playerid] == 1)
+        {
+	        TogglePlayerControllable(playerid,1);
+	        SetCameraBehindPlayer(playerid);
+	        TextDrawHideForPlayer(playerid,Textdraw2);
+	        takingselfie[playerid] = 0;
+	        ApplyAnimation(playerid, "PED", "ATM", 4.1, 0, 1, 1, 0, 1, 1);
+	        return 1;
+        }
+    	return 1;
+}
+
+CMD:td(playerid,params[])
+{
+    if(takingselfie[playerid] == 0) return SendClientMessage(playerid,COLOR_RED,"ERROR: This command works only while taking a selfie");
+    if(hiden[playerid] == 0)
+    {
+        TextDrawHideForPlayer(playerid,Textdraw2);
+        hiden[playerid] = 1;
+        return 1;
+    }
+    if(hiden[playerid] == 1)
+    {
+        TextDrawShowForPlayer(playerid,Textdraw2);
+        hiden[playerid] = 0;
+        return 1;
+    }
+    return 1;
+}
+
+CMD:givetraid(playerid,params[])
+{
+	new target;
+	new level;
+	if(sscanf(params, "ui", target,level))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /setganglevel <Player ID> <level>");
+	    return 1;
+	}
+	if(PlayerInfo[playerid][AdminLevel] > 1)
+	{
+		PlayerInfo[target][Traids] = level;
+		return 1;
+	}
+	return 1;
+}
+
+CMD:givegroove(playerid,params[])
+{
+	new target;
+	new level;
+	if(sscanf(params, "ui", target,level))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /setganglevel <Player ID> <level>");
+	    return 1;
+	}
+	if(PlayerInfo[playerid][AdminLevel] > 1 )
+	{
+		PlayerInfo[target][Groove] = level;
+		return 1;
+	}
+	return 1;
+}
+
+CMD:giveaztec(playerid,params[])
+{
+	new target;
+	new level;
+	if(sscanf(params, "ui", target,level))
+	{
+	    SendClientMessage(playerid,COLOR_ERROR,"USAGE: /setganglevel <Player ID> <level>");
+	    return 1;
+	}
+	if(PlayerInfo[playerid][AdminLevel] > 1 )
+	{
+		PlayerInfo[target][Aztec] = 1;
+		return 1;
+	}
+	return 1;
+}
+
+	
+///////////////////////////////////////////////////STOCK HERE//////////////////////////////////////////
+
+stock GivePlayerScore( playerid, score ) SetPlayerScore( playerid, GetPlayerScore( playerid ) + score );
+
+stock Name(playerid)
+{
+    new nname[MAX_PLAYER_NAME];
+    GetPlayerName(playerid, nname, sizeof(nname));
+    return nname;
+}
+stock Path(playerid) //Will create a new stock so we can easily use it later to load/save user's data in user's path
+{
+    new str[128],name[MAX_PLAYER_NAME];
+    GetPlayerName(playerid,name,sizeof(name));
+    format(str,sizeof(str),UserPath,name);
+    return str;
+}
+
+stock LoadStaticVehiclesFromFile(const filename[])
+{
+	new File:file_ptr;
+	new line[256];
+	new var_from_line[64];
+	new vehicletype;
+	new Float:SpawnX;
+	new Float:SpawnY;
+	new Float:SpawnZ;
+	new Float:SpawnRot;
+    new Color1, Color2;
+	new index;
+	new vehicles_loaded;
+
+	file_ptr = fopen(filename,filemode:io_read);
+	if(!file_ptr) return 0;
+
+	vehicles_loaded = 0;
+
+	while(fread(file_ptr,line,256) > 0)
+	{
+	    index = 0;
+
+	    // Read type
+  		index = token_by_delim(line,var_from_line,',',index);
+  		if(index == (-1)) continue;
+  		vehicletype = strval(var_from_line);
+   		if(vehicletype < 400 || vehicletype > 611) continue;
+
+  		// Read X, Y, Z, Rotation
+  		index = token_by_delim(line,var_from_line,',',index+1);
+  		if(index == (-1)) continue;
+  		SpawnX = floatstr(var_from_line);
+
+  		index = token_by_delim(line,var_from_line,',',index+1);
+  		if(index == (-1)) continue;
+  		SpawnY = floatstr(var_from_line);
+
+  		index = token_by_delim(line,var_from_line,',',index+1);
+  		if(index == (-1)) continue;
+  		SpawnZ = floatstr(var_from_line);
+
+  		index = token_by_delim(line,var_from_line,',',index+1);
+  		if(index == (-1)) continue;
+  		SpawnRot = floatstr(var_from_line);
+
+  		// Read Color1, Color2
+  		index = token_by_delim(line,var_from_line,',',index+1);
+  		if(index == (-1)) continue;
+  		Color1 = strval(var_from_line);
+
+  		index = token_by_delim(line,var_from_line,';',index+1);
+  		Color2 = strval(var_from_line);
+
+  		//printf("%d,%.2f,%.2f,%.2f,%.4f,%d,%d",vehicletype,SpawnX,SpawnY,SpawnZ,SpawnRot,Color1,Color2);
+
+		AddStaticVehicleEx(vehicletype,SpawnX,SpawnY,SpawnZ,SpawnRot,Color1,Color2,(30*60)); // respawn 30 minutes
+
+		/*new numplate_test[32+1];
+		format(numplate_test,32,"GRLC{44AA33}%d",vid);
+		SetVehicleNumberPlate(vid, numplate_test);*/
+
+		vehicles_loaded++;
+	}
+
+	fclose(file_ptr);
+	printf("Loaded %d vehicles from: %s",vehicles_loaded,filename);
+	return vehicles_loaded;
+}
+
+stock token_by_delim(const string[], return_str[], delim, start_index)
+{
+	new x=0;
+	while(string[start_index] != EOS && string[start_index] != delim) {
+	    return_str[x] = string[start_index];
+	    x++;
+	    start_index++;
+	}
+	return_str[x] = EOS;
+	if(string[start_index] == EOS) start_index = (-1);
+	return start_index;
+}
+
+stock UserPath(playerid)
+{
+    new string[128],playername[MAX_PLAYER_NAME];
+    GetPlayerName(playerid,playername,sizeof(playername));
+    format(string,sizeof(string),PATH,playername);
+    return string;
+}
+
+stock GangPath(gangid)
+{
+    new string[128];
+    format(string,sizeof(string),gPATH,gangid);
+    return string;
+}
+
+
+
+stock udb_hash(buf[]) {
+    new length=strlen(buf);
+    new s1 = 1;
+    new s2 = 0;
+    new n;
+    for (n=0; n<length; n++)
+    {
+       s1 = (s1 + buf[n]) % 65521;
+       s2 = (s2 + s1)     % 65521;
+    }
+    return (s2 << 16) + s1;
+}
+
+public JailTimer()
+{
+    new stringg[128];
+    for(new i=0; i < MAX_PLAYERS; i++)
+    {
+        if(IsPlayerConnected(i))
+        {
+            if(JailTime[i] > 0)
+            {
+                JailTime[i]--;
+                format(stringg,sizeof(stringg),"Jailtime: %d",JailTime[i]);
+	            TextDrawSetString(JailTimerr[i],stringg);
+                if(JailTime[i] == 0)
+                {
+                	new string[64], pName[MAX_PLAYER_NAME];
+   					GetPlayerName(i,pName,MAX_PLAYER_NAME);
+                    SetPlayerPos(i,2287.7507,2429.7083,10.8203);
+                    format(string,sizeof string,"%s has been released from jail :)",pName);
+                    SendClientMessageToAll(COLOR_WHITE, string);
+                    GameTextForPlayer(i, "Your free..",500,3);
+                    TextDrawHideForPlayer(i,JailTimerr[i]);
+					SetPlayerWantedLevel(i, 0);
+                    SetPlayerInterior(i, 0);
+                    
+                }
+            }
+        }
+    }
+}
+
+public ServerOneSecondVariables()
+{
+	//SEX SHOP ROBBED RECENTLY
+	if(sexshoprobbedrecently >= 1)
+	{
+	    sexshoprobbedrecently --;
+	}
+	if(tatoorobbedrecently >= 1)
+	{
+	    tatoorobbedrecently --;
+	}
+	if(cbellrobbedrecently >= 1)
+	{
+	    cbellrobbedrecently --;
+	}
+	if(stackwellrobbedrecently >=1)
+	{
+	    stackwellrobbedrecently --;
+	}
+	if(stackwellrobbedrecently == 1)
+	{
+        DestroyDynamicObject(Pizzclose);
+        Pizzsafe = CreateDynamicObject(1829, 379.90164, -115.80128, 1000.96735,   0.00000, 0.00000, 269.57169);
+        
+	}
+	if(ziprobbedrecently >=1)
+	{
+	    ziprobbedrecently --;
+	}
+	if(sevenrobbedrecently >=1)
+	{
+	    sevenrobbedrecently --;
+	}
+		//Car bomb explosion
+	for(new v=0; v<MAX_VEHICLES; v++)
+	{
+	    if(VehicleInfo[v][bombed] > 1)
+	    {
+	        VehicleInfo[v][bombed] --;
+		}
+		if(VehicleInfo[v][bombed] == 1)
+		{
+		    new Float:x, Float:y, Float:z;
+		    GetVehiclePos(v, x, y, z);
+		    SetVehicleHealth(v, 0);
+		    DestroyVehicle(v);
+			CreateExplosion(x, y, z, 6, 10.0);
+			CreateExplosion(x, y, z, 6, 10.0);
+			CreateExplosion(x, y, z, 6, 10.0);
+		    VehicleInfo[v][bombed] =0;
+		    
+		}
+	}
+	return 1;
+}
+
+public PlayerOneSecondVariables()
+{
+     	for(new i=0; i<MAX_PLAYERS; i++)
+		{
+		    if(IsPlayerConnected(i))
+		    {
+		        //ROBBERIES
+      			if(ROBBING_SEXSHOP[i] > 1)
+		        {
+		            ROBBING_SEXSHOP[i] --;
+		            new time[20];
+	                format(time,sizeof(time),"Robbery Time: %d",ROBBING_SEXSHOP[i]);
+	                GameTextForPlayer(i,time,500,3);
+				}
+				if(ROBBING_SEXSHOP[i] == 1)
+				{
+                    new string[128], pName[MAX_PLAYER_NAME];
+    				GetPlayerName(i,pName,MAX_PLAYER_NAME);
+					SendClientMessage(i, COLOR_GREEN, "Robbery Complete");
+					SetPlayerWantedLevel(i, GetPlayerWantedLevel(i) + 1);
+					ROBBING_SEXSHOP[i] =0;
+					GameTextForPlayer(i, " ~g~Robbery Complete", 5000, 3);
+					new mrand =random(10000);
+     				GivePlayerScore(i,1);
+					format(string,sizeof(string),"[ROBBERY] %s(%d) has robbed a total of $%d from Sex Shop! LOL!",pName,i,mrand);
+					SendClientMessageToAll(COLOR_RED,string);
+					GivePlayerMoney(i, mrand);
+				}
+      			if(ROBBING_TATOO[i] > 1)
+		        {
+		            ROBBING_TATOO[i] --;
+		            new time[20];
+	                format(time,sizeof(time),"Robbery Time: %d",ROBBING_TATOO[i]);
+	                GameTextForPlayer(i,time,500,3);
+				}
+				if(ROBBING_TATOO[i] == 1)
+				{
+                    new string[128], pName[MAX_PLAYER_NAME];
+    				GetPlayerName(i,pName,MAX_PLAYER_NAME);
+					SendClientMessage(i, COLOR_GREEN, "Robbery Complete");
+					GameTextForPlayer(i, " ~g~Robbery Complete", 5000, 3);
+					SetPlayerWantedLevel(i, GetPlayerWantedLevel(i) + 1);
+					ROBBING_TATOO[i] =0;
+					new mrand =random(10000);
+     				GivePlayerScore(i,1);
+					format(string,sizeof(string),"[ROBBERY] %s(%d) has robbed a total of $%d from Tatoo Shop! LOL!",pName,i,mrand);
+					SendClientMessageToAll(COLOR_RED,string);
+					GivePlayerMoney(i, mrand);
+				}
+      			if(ROBBING_CBELL[i] > 1)
+		        {
+		            ROBBING_CBELL[i] --;
+		            new time[20];
+	                format(time,sizeof(time),"Robbery Time: %d",ROBBING_CBELL[i]);
+	                GameTextForPlayer(i,time,500,3);
+				}
+				if(ROBBING_CBELL[i] == 1)
+				{
+                    new string[128], pName[MAX_PLAYER_NAME];
+    				GetPlayerName(i,pName,MAX_PLAYER_NAME);
+					SendClientMessage(i, COLOR_GREEN, "Robbery Complete");
+					GameTextForPlayer(i, " ~g~Robbery Complete", 5000, 3);
+					SetPlayerWantedLevel(i, GetPlayerWantedLevel(i) + 1);
+					ROBBING_CBELL[i] =0;
+					new mrand =random(10000);
+     				GivePlayerScore(i,1);
+					format(string,sizeof(string),"[ROBBERY] %s(%d) has robbed a total of $%d from CLUKIN BELL!",pName,i,mrand);
+					SendClientMessageToAll(COLOR_RED,string);
+					GivePlayerMoney(i, mrand);
+				}
+      			if(ROBBING_STACKWELL[i] > 1)
+		        {
+		            ROBBING_STACKWELL[i] --;
+		            new time[20];
+	                format(time,sizeof(time),"Robbery Time: %d",ROBBING_STACKWELL[i]);
+	                GameTextForPlayer(i,time,500,3);
+				}
+				if(ROBBING_STACKWELL[i] == 1)
+				{
+                    new string[128], pName[MAX_PLAYER_NAME];
+    				GetPlayerName(i,pName,MAX_PLAYER_NAME);
+					SendClientMessage(i, COLOR_GREEN, "Robbery Complete");
+					GameTextForPlayer(i, " ~g~Robbery Complete", 5000, 3);
+					SetPlayerWantedLevel(i, GetPlayerWantedLevel(i) + 1);
+					ROBBING_STACKWELL[i] =0;
+					new mrand =random(10000);
+     				GivePlayerScore(i,1);
+					format(string,sizeof(string),"[ROBBERY] %s(%d) has robbed a total of $%d from Stack Bell!",pName,i,mrand);
+					SendClientMessageToAll(COLOR_RED,string);
+					GivePlayerMoney(i, mrand);
+					DestroyDynamicObject(Pizzsafe);
+					Pizzclose = CreateDynamicObject(2332, 380.13321, -115.75529, 1000.93091,   0.00000, 0.00000, 269.54355);
+					ClearAnimations(i);
+				}
+				if(ROBBING_ZIP[i] > 1)
+		        {
+		            ROBBING_ZIP[i] --;
+		            new time[20];
+	                format(time,sizeof(time),"Robbery Time: %d",ROBBING_ZIP[i]);
+	                GameTextForPlayer(i,time,500,3);
+				}
+				if(ROBBING_ZIP[i] == 1)
+				{
+                    new string[128], pName[MAX_PLAYER_NAME];
+    				GetPlayerName(i,pName,MAX_PLAYER_NAME);
+					SendClientMessage(i, COLOR_GREEN, "Robbery Complete");
+					GameTextForPlayer(i, " ~g~Robbery Complete", 5000, 3);
+					SetPlayerWantedLevel(i, GetPlayerWantedLevel(i) + 1);
+					ROBBING_ZIP[i] =0;
+					new mrand =random(10000);
+     				GivePlayerScore(i,1);
+					format(string,sizeof(string),"[ROBBERY] %s(%d) has robbed a total of $%d from ZIP!",pName,i,mrand);
+					SendClientMessageToAll(COLOR_RED,string);
+					GivePlayerMoney(i, mrand);
+				}
+				if(ROBBING_SEVEN[i] > 1)
+		        {
+		            ROBBING_SEVEN[i] --;
+		            new time[20];
+	                format(time,sizeof(time),"Robbery Time: %d",ROBBING_SEVEN[i]);
+	                GameTextForPlayer(i,time,500,3);
+				}
+				if(ROBBING_SEVEN[i] == 1)
+				{
+                    new string[128], pName[MAX_PLAYER_NAME];
+    				GetPlayerName(i,pName,MAX_PLAYER_NAME);
+					SendClientMessage(i, COLOR_GREEN, "Robbery Complete");
+					GameTextForPlayer(i, " ~g~Robbery Complete", 5000, 3);
+					SetPlayerWantedLevel(i, GetPlayerWantedLevel(i) + 1);
+					ROBBING_SEVEN[i] =0;
+					new mrand =random(10000);
+     				GivePlayerScore(i,1);
+					format(string,sizeof(string),"[ROBBERY] %s(%d) has robbed a total of $%d from the SEVEN!!",pName,i,mrand);
+					SendClientMessageToAll(COLOR_RED,string);
+					format(string,sizeof(string),"[POLICE RADIO] %s(%d) has robbed a total of $%d from the SEVEN!!, arrest the supect",pName,i,mrand);
+					SendClientMessageToAllCops(string);
+					GivePlayerMoney(i, mrand);
+				}
+				//Wanted Levels
+				if(GetPlayerWantedLevel(i) >= 1 && GetPlayerWantedLevel(i) <=3)
+			    {
+			        SetPlayerColor(i,COLOR_YELLOW);
+				}
+				if(GetPlayerWantedLevel(i) >= 3 && GetPlayerWantedLevel(i) <=5)
+				{
+				    SetPlayerColor(i,COLOR_ORANGE);
+				}
+				if(GetPlayerWantedLevel(i) == 6)
+				{
+				    SetPlayerColor(i, COLOR_RED);
+				}
+				if(GetPlayerWantedLevel(i) == 0)
+				{
+				    SetPlayerToTeamColour(i);
+				}
+				//Attempted to BC
+				if(AttemptedToBCRecently[i] >= 1)
+				{
+				AttemptedToBCRecently[i] --;
+				}
+				//DRIVING RHINO
+				if(DRIVING_RHINO[i] == 1)
+				{
+				    GivePlayerMoney(i, -200);
+				    if (GetPlayerMoney(i) < 200)
+				    {
+				        DestroyVehicle(RHINO);
+				        SendClientMessage(i,COLOR_RED, "Your Money is finished");
+				        DRIVING_RHINO[i] =0;
+					}
+				}
+				if(BlewCarRecently[i] >= 1)
+				{
+			    BlewCarRecently[i] --;
+				}
+				
+				//Has kidnapped recently
+				if(HasKidnappedRecently[i] >= 1)
+				{
+				    HasKidnappedRecently[i] --;
+				}
+				if(HasbcRecently[i] >= 1)
+				{
+				    HasbcRecently[i] --;
+				}
+				//Has kidnapped recently
+				if(HasRapedRecently[i] >= 1)
+				{
+				    HasRapedRecently[i] --;
+				}
+				if(HasbcRecently[i] >= 1)
+				{
+				    HasbcRecently[i] --;
+				}
+				if(IsKidnapped[i] >= 1)
+				{
+					IsKidnapped[i] --;
+				}
+				if(IsKidnapped[i] == 1)
+				{
+				    new string[128];
+				    IsKidnapped[i] = 0;
+	                TogglePlayerControllable(i, 1);
+                 	format(string, sizeof(string), "[ESCAPE]%s has escaped out of the ropes", PlayerName(i));
+    				SendClientMessageToAll(COLOR_GREEN, string);
+    				TextDrawHideForPlayer(i,blackTD);
+				}
+				if(Anticuff[i] >= 1)
+				{
+				    Anticuff[i] --;
+				}
+				if(Anticuff[i] == 1)
+				{
+				    new string[128];
+                 	format(string, sizeof(string), "Server: Anti-cuff abuse system has removed %s's cuffs!", PlayerName(i));
+    				SendClientMessageToAll(COLOR_GREEN, string);
+    				Anticuff[i] = 0;
+    				TogglePlayerControllable(i,1);
+    				RemovePlayerAttachedObject(i, 0);
+				}
+			}   
+		}
+		return 1;
+}
+
+
+
+stock PlayerName(playerid) {
+  new name[255];
+  GetPlayerName(playerid, name, 255);
+  return name;
+}
+
+public IncreaseWantedLevel(playerid,Value)
+{
+	new string[128];
+	new pcol =GetPlayerColor(playerid);
+	new pwlvl = GetPlayerWantedLevel(playerid);
+	pwlvl +=Value;
+	SetPlayerWantedLevel(playerid,pwlvl);
+	format(string,sizeof(string),"[WANTED LEVEL INCREASE] Your wanted level has been increased to Level: %d",pwlvl);
+	SendClientMessage(playerid,pcol,string);
+	return 1;
+}
+
+public OnPlayerModelSelection(playerid, response, listid, modelid)
+{
+    if(listid == vehlist)
+    {
+        if(response)
+        {
+            new Float:x, Float:y, Float:z;
+            GetPlayerPos(playerid, x, y, z);
+
+            SendClientMessage(playerid, 0xFF0000FF, "Vehicle Spawned.");
+            car = CreateVehicle(modelid, x + 2.5, y, z + 2.5, 0.0, random(128), random(128), -1);
+            SetVehicleVirtualWorld(car, 3);
+            PlayerPlaySound(playerid, 1085, 0.0, 0.0, 0.0);
+        }
+        else SendClientMessage(playerid, 0xFF0000FF, "Canceled vehicle selection.");
+        return 1;
+    }
+    if(listid == skinlist)
+    {
+    if(response)
+    {
+        SendClientMessage(playerid, 0xFF0000FF, "Skin Changed");
+        SetPlayerSkin(playerid, modelid);
+    }
+    else SendClientMessage(playerid, 0xFF0000FF, "Canceled skin selection");
+    return 1;
+    }
+    if(listid == Seven)
+    {
+    if(response)
+    {
+        if(modelid == 1550)
+        {
+            SendClientMessage(playerid, 0xFF0000FF, "Model 1550 Clicked");
+            return 1;
+		}
+        
+    }
+    else SendClientMessage(playerid, 0xFF0000FF, "Canceled skin selection");
+    return 1;
+    }
+    return 1;
+}
+
+public SendClientMessageToAllCops(msg[])
+{
+	for(new i=0; i<MAX_PLAYERS; i++)
+	{
+	    if(IsPlayerConnected(i))
+	    {
+			if(gTeam[i] == TEAM_COP)
+			{
+			    SendClientMessage(i,COLOR_BLUE,msg);
+			}
+		}
+	}
+}
+
+stock ArePlayersFacing(playerid, targetid) {
+        new
+            Float:angle1,
+            Float:angle2,
+                Float:difference
+        ;
+        GetPlayerFacingAngle(playerid, angle1);
+        GetPlayerFacingAngle(targetid, angle2);
+        if(angle1 > angle2) difference = angle1 - angle2;
+        else difference = angle2 - angle1;
+        if(difference < 190 && difference > 170) return 1;
+        return 0;
+}
+
+/////////////////////////////////////////////////////////IRC///////////////////////////////////////////////////
+public IRC_OnConnect(botid, ip[], port)
+{
+	new string[256];
+	printf("*** IRC_OnConnect: Bot ID %d connected to %s:%d", botid, ip, port);
+	// Join the channel
+	IRC_JoinChannel(botid, IRC_CHANNEL);
+	// Add the bot to the group
+	IRC_AddToGroup(groupID, botid);
+	format(string,sizeof(string),"PRIVMSG NickServ :identify %s",IRC_BOT_PASSWORD);
+	IRC_SendRaw(botid, string);
+	return 1;
+}
+
+/*
+	This callback is executed whenever a current connection is closed. The
+	plugin may automatically attempt to reconnect per user settings. IRC_Quit
+	may be called at any time to stop the reconnection process.
+*/
+
+public IRC_OnDisconnect(botid, ip[], port, reason[])
+{
+	printf("*** IRC_OnDisconnect: Bot ID %d disconnected from %s:%d (%s)", botid, ip, port, reason);
+	// Remove the bot from the group
+	IRC_RemoveFromGroup(groupID, botid);
+	return 1;
+}
+
+/*
+	This callback is executed whenever a connection attempt begins. IRC_Quit may
+	be called at any time to stop the reconnection process.
+*/
+
+public IRC_OnConnectAttempt(botid, ip[], port)
+{
+	printf("*** IRC_OnConnectAttempt: Bot ID %d attempting to connect to %s:%d...", botid, ip, port);
+	return 1;
+}
+
+/*
+	This callback is executed whenever a connection attempt fails. IRC_Quit may
+	be called at any time to stop the reconnection process.
+*/
+
+public IRC_OnConnectAttemptFail(botid, ip[], port, reason[])
+{
+	printf("*** IRC_OnConnectAttemptFail: Bot ID %d failed to connect to %s:%d (%s)", botid, ip, port, reason);
+	return 1;
+}
+
+/*
+	This callback is executed whenever a bot joins a channel.
+*/
+
+public IRC_OnJoinChannel(botid, channel[])
+{
+	printf("*** IRC_OnJoinChannel: Bot ID %d joined channel %s", botid, channel);
+	return 1;
+}
+
+/*
+	This callback is executed whenevever a bot leaves a channel.
+*/
+
+public IRC_OnLeaveChannel(botid, channel[], message[])
+{
+	printf("*** IRC_OnLeaveChannel: Bot ID %d left channel %s (%s)", botid, channel, message);
+	return 1;
+}
+
+/*
+	This callback is executed whenevever a bot is invited to a channel.
+*/
+
+public IRC_OnInvitedToChannel(botid, channel[], invitinguser[], invitinghost[])
+{
+	printf("*** IRC_OnInvitedToChannel: Bot ID %d invited to channel %s by %s (%s)", botid, channel, invitinguser, invitinghost);
+	IRC_JoinChannel(botid, channel);
+	return 1;
+}
+
+/*
+	This callback is executed whenevever a bot is kicked from a channel. If the
+	bot cannot immediately rejoin the channel (in the event, for example, that
+	the bot is kicked and then banned), you might want to set up a timer here
+	for rejoin attempts.
+*/
+
+public IRC_OnKickedFromChannel(botid, channel[], oppeduser[], oppedhost[], message[])
+{
+	printf("*** IRC_OnKickedFromChannel: Bot ID %d kicked by %s (%s) from channel %s (%s)", botid, oppeduser, oppedhost, channel, message);
+	IRC_JoinChannel(botid, channel);
+	return 1;
+}
+
+public IRC_OnUserDisconnect(botid, user[], host[], message[])
+{
+	printf("*** IRC_OnUserDisconnect (Bot ID %d): User %s (%s) disconnected (%s)", botid, user, host, message);
+	return 1;
+}
+
+public IRC_OnUserJoinChannel(botid, channel[], user[], host[])
+{
+ 	new msg[128];
+	printf("*** IRC_OnUserJoinChannel (Bot ID %d): User %s (%s) joined channel %s", botid, user, host, channel);
+    format(msg, sizeof(msg), "Hey %s Welcome to super Gamming", user);
+	IRC_GroupSay(groupID, IRC_CHANNEL, msg);
+	return 1;
+}
+
+public IRC_OnUserLeaveChannel(botid, channel[], user[], host[], message[])
+{
+	printf("*** IRC_OnUserLeaveChannel (Bot ID %d): User %s (%s) left channel %s (%s)", botid, user, host, channel, message);
+	return 1;
+}
+
+public IRC_OnUserKickedFromChannel(botid, channel[], kickeduser[], oppeduser[], oppedhost[], message[])
+{
+	printf("*** IRC_OnUserKickedFromChannel (Bot ID %d): User %s kicked by %s (%s) from channel %s (%s)", botid, kickeduser, oppeduser, oppedhost, channel, message);
+}
+
+public IRC_OnUserNickChange(botid, oldnick[], newnick[], host[])
+{
+	printf("*** IRC_OnUserNickChange (Bot ID %d): User %s (%s) changed his/her nick to %s", botid, oldnick, host, newnick);
+	return 1;
+}
+
+public IRC_OnUserSetChannelMode(botid, channel[], user[], host[], mode[])
+{
+	printf("*** IRC_OnUserSetChannelMode (Bot ID %d): User %s (%s) on %s set mode: %s", botid, user, host, channel, mode);
+	return 1;
+}
+
+public IRC_OnUserSetChannelTopic(botid, channel[], user[], host[], topic[])
+{
+	printf("*** IRC_OnUserSetChannelTopic (Bot ID %d): User %s (%s) on %s set topic: %s", botid, user, host, channel, topic);
+	return 1;
+}
+
+public IRC_OnUserSay(botid, recipient[], user[], host[], message[])
+{
+	printf("*** IRC_OnUserSay (Bot ID %d): User %s (%s) sent message to %s: %s", botid, user, host, recipient, message);
+	// Someone sent the first bot a private message
+	if (!strcmp(recipient, BOT_1_NICKNAME))
+	{
+		IRC_Say(botid, user, "You sent me a PM!");
+	}
+	if(!strcmp(message,"hey guys"))
+	{
+	    IRC_GroupSay(groupID, IRC_CHANNEL, "Hey! Welcome To Super Gamming");
+	}
+	return 1;
+}
+
+public IRC_OnUserNotice(botid, recipient[], user[], host[], message[])
+{
+	printf("*** IRC_OnUserNotice (Bot ID %d): User %s (%s) sent notice to %s: %s", botid, user, host, recipient, message);
+	// Someone sent the second bot a notice (probably a network service)
+	if (!strcmp(recipient, BOT_2_NICKNAME))
+	{
+		IRC_Notice(botid, user, "You sent me a notice!");
+	}
+	return 1;
+}
+
+public IRC_OnUserRequestCTCP(botid, user[], host[], message[])
+{
+	printf("*** IRC_OnUserRequestCTCP (Bot ID %d): User %s (%s) sent CTCP request: %s", botid, user, host, message);
+	// Someone sent a CTCP VERSION request
+	if (!strcmp(message, "VERSION"))
+	{
+		IRC_ReplyCTCP(botid, user, "VERSION SA-MP IRC Plugin v" #PLUGIN_VERSION "");
+	}
+	return 1;
+}
+
+public IRC_OnUserReplyCTCP(botid, user[], host[], message[])
+{
+	printf("*** IRC_OnUserReplyCTCP (Bot ID %d): User %s (%s) sent CTCP reply: %s", botid, user, host, message);
+	return 1;
+}
+
+/*
+	This callback is useful for logging, debugging, or catching error messages
+	sent by the IRC server.
+*/
+
+public IRC_OnReceiveRaw(botid, message[])
+{
+	new File:file;
+	if (!fexist("irc_log.txt"))
+	{
+		file = fopen("irc_log.txt", io_write);
+	}
+	else
+	{
+		file = fopen("irc_log.txt", io_append);
+	}
+	if (file)
+	{
+		fwrite(file, message);
+		fwrite(file, "\r\n");
+		fclose(file);
+	}
+	return 1;
+}
+
+/*
+	Some examples of channel commands are here. You can add more very easily;
+	their implementation is identical to that of ZeeX's zcmd.
+*/
+
+IRCCMD:say(botid, channel[], user[], host[], params[])
+{
+	if (!isnull(params))
+	{
+		new msg[128];
+			// Echo the formatted message
+		format(msg, sizeof(msg), "02*** %s on IRC: %s", user, params);
+		IRC_GroupSay(groupID, channel, msg);
+		format(msg, sizeof(msg), "*** %s on IRC: %s", user, params);
+		SendClientMessageToAll(0x00CCCCFF, msg);
+	}
+
+	return 1;
+}
+
+
+IRCCMD:asay(botid, channel[], user[], host[], params[])
+{
+    	// Check if the user has at least voice in the channel
+	if (IRC_IsOwner(botid, channel, user))
+	{
+		// Check if the user entered any text
+		if (!isnull(params))
+		{
+			new msg[128];
+			// Echo the formatted message
+			format(msg, sizeof(msg), "12Owner %s on IRC: %s", user, params);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "Owner %s on IRC: %s", user, params);
+			SendClientMessageToAll(0x00CCCCFF, msg);
+			return 1;
+		}
+	}
+	// Check if the user has at least voice in the channel
+	if (IRC_IsOp(botid, channel, user))
+	{
+		// Check if the user entered any text
+		if (!isnull(params))
+		{
+			new msg[128];
+			// Echo the formatted message
+			format(msg, sizeof(msg), "12Administrator %s on IRC: %s", user, params);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "Administrator %s on IRC: %s", user, params);
+			SendClientMessageToAll(0x00CCCCFF, msg);
+			return 1;
+		}
+	}
+	if (IRC_IsVoice(botid, channel, user))
+	{
+		// Check if the user entered any text
+		if (!isnull(params))
+		{
+			new msg[128];
+			// Echo the formatted message
+			format(msg, sizeof(msg), "11Moderator %s on IRC: %s", user, params);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "Moderator %s on IRC: %s", user, params);
+			SendClientMessageToAll(0x00CCCCFF, msg);
+			return 1;
+		}
+	}
+	return 1;
+}
+
+
+IRCCMD:kick(botid, channel[], user[], host[], params[])
+{
+	// Check if the user is at least a halfop in the channel
+	if (IRC_IsOwner(botid, channel, user))
+	{
+		new playerid, reason[64];
+		// Check if the user at least entered a player ID
+		if (sscanf(params, "dS(No reason)[64]", playerid, reason))
+		{
+			return 1;
+		}
+		// Check if the player is connected
+		if (IsPlayerConnected(playerid))
+		{
+		    if(PlayerInfo[playerid][AdminLevel] > 1)
+		    {
+		        IRC_GroupSay(groupID, channel, "You Cannot Kick AN ADMIN!");
+			}
+		    
+			// Echo the formatted message
+			new msg[128], name[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, name, sizeof(name));
+			format(msg, sizeof(msg), "02*** %s has been kicked by Owner %s on IRC for reason: %s", name, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been kicked by Owner %s on IRC for reason: %s", name, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			// Kick the player
+			Kick(playerid);
+			return 1;
+		}
+	}
+	if (IRC_IsOp(botid, channel, user))
+	{
+		new playerid, reason[64];
+		// Check if the user at least entered a player ID
+		if (sscanf(params, "dS(No reason)[64]", playerid, reason))
+		{
+			return 1;
+		}
+		// Check if the player is connected
+		if (IsPlayerConnected(playerid))
+		{
+			// Echo the formatted message
+			new msg[128], name[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, name, sizeof(name));
+			format(msg, sizeof(msg), "02*** %s has been kicked by Administrator %s on IRC for reason: %s", name, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been kicked by Administrator %s on IRC for reason: %s", name, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			// Kick the player
+			Kick(playerid);
+			return 1;
+		}
+	}
+	if (IRC_IsVoice(botid, channel, user))
+	{
+		new playerid, reason[64];
+		// Check if the user at least entered a player ID
+		if (sscanf(params, "dS(No reason)[64]", playerid, reason))
+		{
+			return 1;
+		}
+		// Check if the player is connected
+		if (IsPlayerConnected(playerid))
+		{
+			// Echo the formatted message
+			new msg[128], name[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, name, sizeof(name));
+			format(msg, sizeof(msg), "02*** %s has been kicked by Moderator %s on IRC for reason: %s", name, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been kicked by Moderator %s on IRC for reason: %s", name, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			// Kick the player
+			Kick(playerid);
+			return 1;
+		}
+	}
+	return 1;
+}
+
+IRCCMD:oban(botid, channel[], user[], host[], params[])
+{
+	// Check if the user is at least an op in the channel
+	if (IRC_IsOwner(botid, channel, user))
+	{
+		new playerid, reason[64];
+		// Check if the user at least entered a player ID
+		if (sscanf(params, "dS(No reason)[64]", playerid, reason))
+		{
+			return 1;
+		}
+		// Check if the player is connected
+		if (IsPlayerConnected(playerid))
+		{
+			// Echo the formatted message
+			new msg[128], name[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, name, sizeof(name));
+			format(msg, sizeof(msg), "02*** %s has been banned by Owner %s on IRC for reason: %s", name, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been banned by Owner %s on IRC for reason: %s", name, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			// Ban the player
+			BanEx(playerid, reason);
+			return 1;
+		}
+	}
+	if (IRC_IsVoice(botid, channel, user))
+	{
+		new playerid, reason[64];
+		// Check if the user at least entered a player ID
+		if (sscanf(params, "dS(No reason)[64]", playerid, reason))
+		{
+			return 1;
+		}
+		// Check if the player is connected
+		if (IsPlayerConnected(playerid))
+		{
+			// Echo the formatted message
+			new msg[128], name[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, name, sizeof(name));
+			format(msg, sizeof(msg), "02*** %s has been banned by Moderator %s on IRC for reason: %s", name, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been banned by Moderator %s on IRC for reason: %s", name, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			// Ban the player
+			BanEx(playerid, reason);
+			return 1;
+		}
+	}
+	// Check if the user is at least an op in the channel
+	if (IRC_IsOp(botid, channel, user))
+	{
+		new playerid, reason[64];
+		// Check if the user at least entered a player ID
+		if (sscanf(params, "dS(No reason)[64]", playerid, reason))
+		{
+			return 1;
+		}
+		// Check if the player is connected
+		if (IsPlayerConnected(playerid))
+		{
+			// Echo the formatted message
+			new msg[128], name[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, name, sizeof(name));
+			format(msg, sizeof(msg), "02*** %s has been banned by Administrator %s on IRC for reason: %s", name, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been banned by Administrator %s on IRC for reason: %s", name, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			// Ban the player
+			BanEx(playerid, reason);
+			return 1;
+		}
+	}
+	return 1;
+}
+
+
+
+IRCCMD:rcon(botid, channel[], user[], host[], params[])
+{
+	// Check if the user is at least an Owner in the channel
+	if (IRC_IsOwner(botid, channel, user))
+	{
+		// Check if the user entered any text
+		if (!isnull(params))
+		{
+			// Check if the user did not enter any invalid commands
+			if (strcmp(params, "exit", true) != 0 && strfind(params, "loadfs irc", true) == -1)
+			{
+				// Echo the formatted message
+				new msg[128];
+				format(msg, sizeof(msg), "RCON command %s has been successfully executed.", params);
+				IRC_GroupSay(groupID, channel, msg);
+				// Send the command
+				SendRconCommand(params);
+			}
+		}
+	}
+	return 1;
+}
+
+IRCCMD:players( botid, channel[], user[], host[], params[] )
+{
+    new tempstr[128], string[200], count, name[24];
+    for( new i ,slots = GetMaxPlayers(); i < slots; i++ )
+    {
+        if(IsPlayerConnected(i))
+        {
+            count++;
+            GetPlayerName(i, name, sizeof(name));
+            format(tempstr, sizeof(tempstr), "%s , %s", tempstr, name);
+        }
+    }
+    if(count)
+    {
+        format(string, sizeof(string), "Connected Players[%d/%d]:- %s", count, GetMaxPlayers(), tempstr);
+        IRC_Say(botid, channel, string);
+    } else IRC_Say(botid, channel, "No players are online.");
+    return 1;
+}
+
+IRCCMD:cmds(botid, channel[], user[], host[], params[])
+{
+	new string[18];
+	new string2[230];
+	new string3[80];
+
+	format(string, sizeof(string), "IRC COMMANDS:");
+	format(string2, sizeof(string2), "!players, !rcon, !ban, !kick, !asay, !say, !slap, !warn, !freeze, !unfreeze, !explode, !disarm, !getname, !forums");
+	format(string3, sizeof(string3), "!spawn,  !getinfo, !givecar");
+
+	IRC_Say(botid, channel, string);
+	IRC_Say(botid, channel, string2);
+	IRC_Say(botid, channel, string3);
+
+	//Displays a full list of commands on IRC. By NoahF. :)
+
+	return 1;
+}
+
+IRCCMD:slap(botid, channel[], user[], host[], params[])
+{
+	new playerid, reason[64];
+	//Playerid
+	if (sscanf(params, "dS(No reason.)[64]", playerid, reason))
+	{
+		return 1;
+	}
+    if (IRC_IsVoice(botid, channel, user))
+	{
+		if(IsPlayerConnected(playerid))
+		{
+			new msg[128], pname[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, pname, sizeof(pname));
+			format(msg, sizeof(msg), "*** %s has been slapped by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been slapped by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			//"Slap" the target. By NoahF. :)
+			new Float:Health;
+			new Float:x, Float:y, Float:z;
+			GetPlayerHealth(playerid,Health);
+			SetPlayerHealth(playerid,Health-25);
+			GetPlayerPos(playerid,x,y,z);
+			SetPlayerPos(playerid,x,y,z+7);
+			PlayerPlaySound(playerid,1190,0.0,0.0,0.0);
+			PlayerPlaySound(playerid,1190,0.0,0.0,0.0);
+		}
+	}
+	return 1;
+}
+
+IRCCMD:warn(botid, channel[], user[], host[], params[])
+{
+	new playerid, reason[64];
+	//Playerid
+	if (sscanf(params, "dS(No reason.)[64]", playerid, reason))
+	{
+		return 1;
+	}
+    if (IRC_IsVoice(botid, channel, user))
+	{
+		if(IsPlayerConnected(playerid))
+		{
+			new msg[128], pname[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, pname, sizeof(pname));
+			format(msg, sizeof(msg), "*** %s has been warned by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been warned by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			SendClientMessageToAll(0xFFFF00C8, msg);
+			//Simple warn by NoahF. :)
+		}
+	}
+	return 1;
+}
+
+IRCCMD:freeze(botid, channel[], user[], host[], params[])
+{
+	new playerid, reason[64];
+	//Playerid
+	if (sscanf(params, "dS(No reason.)[64]", playerid, reason))
+	{
+		return 1;
+	}
+    if (IRC_IsVoice(botid, channel, user))
+	{
+		if(IsPlayerConnected(playerid))
+		{
+			new msg[128], pname[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, pname, sizeof(pname));
+			format(msg, sizeof(msg), "*** %s has been frozen by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been frozen by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			//Freeze.
+			TogglePlayerControllable(playerid, 0);
+			//Freeze the player, by Noah.
+		}
+	}
+	return 1;
+}
+
+IRCCMD:unfreeze(botid, channel[], user[], host[], params[])
+{
+	new playerid, reason[64];
+	//Playerid
+	if (sscanf(params, "dS(No reason.)[64]", playerid, reason))
+	{
+		return 1;
+	}
+    if (IRC_IsVoice(botid, channel, user))
+	{
+		if(IsPlayerConnected(playerid))
+		{
+			new msg[128], pname[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, pname, sizeof(pname));
+			format(msg, sizeof(msg), "*** %s has been unfrozen by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been unfrozen by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			SendClientMessageToAll(0x00E600C8, msg);
+	        TogglePlayerControllable(playerid, 1);
+		}
+	}
+	return 1;
+}
+//Unfreeze by Noah.
+
+IRCCMD:explode(botid, channel[], user[], host[], params[])
+{
+	new playerid, reason[64];
+	new player1;
+	//Playerid
+	if (sscanf(params, "dS(No reason.)[64]", playerid, reason))
+	{
+		return 1;
+	}
+    if (IRC_IsHalfop(botid, channel, user))
+	{
+		if(IsPlayerConnected(playerid))
+		{
+			new msg[128], pname[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, pname, sizeof(pname));
+			format(msg, sizeof(msg), "*** %s has been exploded by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been exploded by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			new Float:x, Float:y, Float:z;
+			GetPlayerPos(player1,x,y,z);
+			CreateExplosion(x, y, z, 0, 10.0);
+		}
+	}
+	return 1;
+}
+//Explode, by Noah.
+
+IRCCMD:disarm(botid, channel[], user[], host[], params[])
+{
+	new playerid, reason[64];
+	//Playerid
+	if (sscanf(params, "dS(No reason.)[64]", playerid, reason))
+	{
+		return 1;
+	}
+    if (IRC_IsHalfop(botid, channel, user))
+	{
+		if(IsPlayerConnected(playerid))
+		{
+			new msg[128], pname[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, pname, sizeof(pname));
+			format(msg, sizeof(msg), "*** %s has been disarmed by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been disarmed by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			ResetPlayerWeapons(playerid);
+		}
+	}
+	return 1;
+}
+//Disarm by Noah.
+//Resetcash, by Noah.
+
+IRCCMD:giveallcash(botid, channel[], user[], host[], params[])
+{
+    new value;
+	new msg1[128];
+	new msg2[128];
+
+    if(sscanf(params, "d", value) != 0)
+    {
+        return 1;
+	}
+	if (IRC_IsVoice(botid, channel, user))
+	{
+    	for(new i=0; i<MAX_PLAYERS; i++)
+    	{
+        	if(IsPlayerConnected(i))
+        	{
+				GivePlayerMoney(i, value);
+                format(msg1, sizeof(msg1), "*** Happy Staff Member %s has given all players some cash!", user);
+				IRC_GroupSay(groupID, channel, msg1);
+                format(msg2, sizeof(msg2), "*** Happy Staff Member %s has given all players some cash!", user);
+                SendClientMessageToAll(0x00E600C8, msg2);
+			}
+    	}
+	}
+	return 1;
+}
+//Giveallcash, by Noah.
+
+IRCCMD:getname(botid, channel[], user[], host[], params[])
+{
+	new playerid;
+	//Playerid
+	if (sscanf(params, "d", playerid))
+	{
+		return 1;
+	}
+	if(IsPlayerConnected(playerid))
+	{
+		new msg[128], pname[MAX_PLAYER_NAME];
+		GetPlayerName(playerid, pname, sizeof(pname));
+		format(msg, sizeof(msg), "*** The player's name is %s", pname, user);
+		IRC_GroupSay(groupID, channel, msg);
+	}
+	return 1;
+}
+//Getname, by Noah.
+
+IRCCMD:forums(botid, channel[], user[], host[], params[])
+{
+	new string29[128];
+	new string30[128];
+
+	if (IRC_IsVoice(botid, channel, user))
+	{
+		format(string29, 128, "Sign up at our forums today! http://www.superrobot48.comze.com/"); //change this to your forums
+		format(string30, 128, "Sign up at our forums today! http://www.superrobot48.comze.com/"); //Change to your forums
+
+		IRC_GroupSay(groupID, channel, string29);
+
+		SendClientMessageToAll(0x00E800C8, string30);
+	}
+	return 1;
+}
+//Forums, by Noah.
+
+
+IRCCMD:spawn(botid, channel[], user[], host[], params[])
+{
+	new playerid, reason[64];
+	//Playerid
+	if (sscanf(params, "dS(No reason.)[64]", playerid, reason))
+	{
+		return 1;
+	}
+    if (IRC_IsVoice(botid, channel, user))
+	{
+		if(IsPlayerConnected(playerid))
+		{
+			new msg[128], pname[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, pname, sizeof(pname));
+			format(msg, sizeof(msg), "*** %s has been spawned by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been spawned by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			SpawnPlayer(playerid);
+		}
+	}
+	return 1;
+}
+// Spawn by Noah.
+
+IRCCMD:getinfo(botid, channel[], user[], host[], params[])
+{
+	new playerid, pIP[128], Float:health, Float:armour;
+	//Playerid
+	if (sscanf(params, "d", playerid))
+	{
+		return 1;
+	}
+	if(IsPlayerConnected(playerid))
+	{
+		new msg[128], pname[MAX_PLAYER_NAME];
+		GetPlayerName(playerid, pname, sizeof(pname));
+		GetPlayerIp(playerid, pIP, 128);
+		GetPlayerHealth(playerid, health);
+		GetPlayerArmour(playerid, armour);
+		new Float:x, Float:y, Float:z;
+		GetPlayerPos(playerid, x, y, z);
+		new ping;
+		ping = GetPlayerPing(playerid);
+		new skin;
+		skin = GetPlayerSkin(playerid);
+		format(msg, sizeof(msg), "*** %s's info: IP: %s | Health: %d | Armour: %d | Ping: %d | Skin ID: %d | Player Position: %d, %d, %d", pname, pIP, floatround(health), floatround(armour), ping, skin, x, y, z);
+		IRC_GroupSay(groupID, channel, msg);
+	}
+	return 1;
+}
+//By NoahF.
+
+IRCCMD:respawncars(botid, channel[], user[], host[], params[])
+{
+	new string1[128], string2[128];
+
+	if (IRC_IsVoice(botid, channel, user))
+	{
+		for(new i = 1; i <= MAX_VEHICLES; i++)
+		{
+			SetVehicleToRespawn(i);
+		}
+		format(string1, 128, "*** Staff Member %s has respawned all vehicles", user);
+		format(string2, 128, "*** Staff Member %s has respawned all vehicles", user);
+
+		IRC_GroupSay(groupID, channel, string1);
+		SendClientMessageToAll(0x00E800C8, string2);
+ 	}
+	return 1;
+}
+
+IRCCMD:givecar(botid, channel[], user[], host[], params[])
+{
+	new playerid, reason[64];
+	new Float:x;
+	new Float:y;
+	new Float:z;
+	//Playerid
+	if (sscanf(params, "dS(No reason.)[64]", playerid, reason))
+	{
+		return 1;
+	}
+    if (IRC_IsVoice(botid, channel, user))
+	{
+		if(IsPlayerConnected(playerid))
+		{
+			new msg[128], pname[MAX_PLAYER_NAME];
+			GetPlayerName(playerid, pname, sizeof(pname));
+			GetPlayerPos(playerid, x, y, z);
+			format(msg, sizeof(msg), "*** %s has been given a Elegy by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			IRC_GroupSay(groupID, channel, msg);
+			format(msg, sizeof(msg), "*** %s has been given a Elegy by Staff Member %s on IRC for reason: %s", pname, user, reason);
+			SendClientMessageToAll(0xFF0000C8, msg);
+			CreateVehicle(562, x, y, z, 82.2873, 6, 3, 3000); //Change any of these if you want, don't forget to change the SendClientMessage if you change the car! :P
+		}
+	}
+	return 1;
+}
+//GiveCar by NoahF
+
+public TaxiPay()
+{
+	new string[128];
+	for(new i=0; i<MAX_PLAYERS; i++)
+	{
+		for(new j=0; j<MAX_PLAYERS; j++)
+		{
+			if(PayingTaxi[i] == 1)
+			{
+			    if(HasTaxiFare[j] == i)
+			    {
+			        if(GetPlayerVehicleID(i) == GetPlayerVehicleID(j))
+			        {
+			            if(GetPlayerMoney(i) < SkillPrice[j])
+			            {
+			                SendClientMessage(i,COLOR_ERROR,"You cannot afford to pay the taxi fare.");
+			                RemovePlayerFromVehicle(i);
+			                return 1;
+						}
+			            GivePlayerMoney(i,-SkillPrice[j]);
+			            GivePlayerMoney(j,SkillPrice[j]);
+			            format(string,sizeof(string),"%s(%d) has recieved $%d from %s(%d)'s fare.",PlayerName(j),j,SkillPrice[j],PlayerName(i),i);
+			            IRC_GroupSay(groupID,IRC_CHANNEL,string);
+			            return 1;
+					}
+				}
+			}
+		}
+	}
+	return 1;
+}
+
+public SendClientMessageToAllDrivers(msg[])
+{
+	for(new i=0; i<MAX_PLAYERS; i++)
+	{
+	    if(IsPlayerConnected(i))
+	    {
+			if(gTeam[i] == TEAM_TAXI)
+			{
+			    SendClientMessage(i,COLOR_DARKOLIVEGREEN,msg);
+			}
+		}
+	}
+}
+
+
+// ========== [ -|- FUNCTION -|- ] ==========
+#define MAX_SLOTS (50)
+new ObjectCampfire[MAX_SLOTS][8];
+stock DestroyObjectCampfire(slots) {
+	DestroyObject(ObjectCampfire[slots][0]);
+	DestroyObject(ObjectCampfire[slots][1]);
+	DestroyObject(ObjectCampfire[slots][2]);
+	DestroyObject(ObjectCampfire[slots][3]);
+	DestroyObject(ObjectCampfire[slots][4]);
+	DestroyObject(ObjectCampfire[slots][5]);
+	DestroyObject(ObjectCampfire[slots][6]);
+	DestroyObject(ObjectCampfire[slots][7]);
+}
+stock CreateObjectCampfire(slots, Float:x, Float:y, Float:z, Float:a) {
+	ObjectCampfire[slots][0]=CreateObject(841, x, y, z-1, 0.000, 0.000, a);
+	ObjectCampfire[slots][1]=CreateObject(841, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000);
+	ObjectCampfire[slots][2]=CreateObject(841, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000);
+	ObjectCampfire[slots][3]=CreateObject(18688, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000);
+	ObjectCampfire[slots][4]=CreateObject(18688, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000);
+	ObjectCampfire[slots][5]=CreateObject(18688, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000);
+	ObjectCampfire[slots][6]=CreateObject(18688, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000);
+	ObjectCampfire[slots][7]=CreateObject(18688, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000);
+    AttachObjectToObject(ObjectCampfire[slots][1], ObjectCampfire[slots][0], 0, -0.5, 0, 0, 0, 0, 1);
+    AttachObjectToObject(ObjectCampfire[slots][2], ObjectCampfire[slots][0], 0, -0.5, 0, 0, 0, 90, 1);
+    AttachObjectToObject(ObjectCampfire[slots][3], ObjectCampfire[slots][0], 0.5, -0.5, -2, 0, 0, 0, 1);
+    AttachObjectToObject(ObjectCampfire[slots][4], ObjectCampfire[slots][0], -0.5, -0.5, -2, 0, 0, 0, 1);
+    AttachObjectToObject(ObjectCampfire[slots][5], ObjectCampfire[slots][0], 0, -0.5, -2, 0, 0, 0, 1);
+    AttachObjectToObject(ObjectCampfire[slots][6], ObjectCampfire[slots][0], 0, -0.5, -2, 0, 0, 0, 1);
+    AttachObjectToObject(ObjectCampfire[slots][7], ObjectCampfire[slots][0], 0, -0.5, -2, 0, 0, 0, 1);
+}
+
+public TimeU()
+{
+    new string[7];                              // it makes a variable for a string with size 128
+    Tsec+=1;                                      //this adds 1 to the existing time variable
+    if(Tsec==60) {                                //this resets the mins to 00 one it reaches 60
+        Tsec=00;
+        THrs+=1;                                  //this adds 1 to the hours every 60 seconds
+    }
+    if(THrs==24) {                                //This Checks if time is 24:00
+        Tsec=00;                                  //This Sets resets Mins
+        THrs=0;                                   //this Resets Hours
+    }
+    if(Tsec<10) {                                 // This Adds a 0 Before The Mins Display For it To look like an actual clock
+                                                  //formats string
+        format(string,sizeof(string),"%d:%d0",THrs,Tsec);
+
+    }
+    if(Tsec>10) {                                 // This Removes a 0 Before The Mins Display after it has reached 10
+                                                  //formats string
+        format(string,sizeof(string),"%d:%d",THrs,Tsec);
+
+    }
+    if(THrs<10) {
+                                                  //formats string
+        format(string,sizeof(string),"0%d:%d",THrs,Tsec);
+
+    }
+    for(new i; i<MAX_PLAYERS; i++) {              //loops through all players
+        if(IsPlayerConnected(i)) {                //checks if the player is connected
+            SetPlayerTime(i,THrs,Tsec);           //sets All players time
+        }
+    }
+    TextDrawSetString(Servt,string);              //updates the textdraw
+
+}
+
+public RandomMessage()
+{
+        TextDrawSetString(randommsg, RandomMessages[random(sizeof(RandomMessages))]); // We need this to make the timer working
+        return 1;
+}
+
+public Weather()
+{
+	new rand = random(5);
+    switch(rand)
+    {
+            case 0: SetWeather(19) && SendClientMessageToAll( COLOR_YELLOW," Meterologists: Hey Super Gammers!  there is a sand storm incomming! watch out!");
+            case 1: SetWeather(1) && SendClientMessageToAll( COLOR_YELLOW," Meterologists: Hey Super Gammers! The sun is very bright enjoy!");
+            case 2: SetWeather(8) && SendClientMessageToAll( COLOR_YELLOW," Meterologists: Hey Super Gammers! There is a chance of rain!");
+            case 3: SetWeather(15) && SendClientMessageToAll( COLOR_YELLOW," Meterologists: Hey Super Gammers! Huge dark clouds are comming!");
+            case 4: SetWeather(0) && SendClientMessageToAll( COLOR_YELLOW," Meterologists: Hey Super Gammers! Well its extra sunny , you know what to do!");
+
+    }
+}
+
+stock GetTeamColour(playerid)
+{
+	if(PlayerInfo[playerid][Groove] >1)
+	{
+	    return COLOR_GREEN;
+	}
+	if(PlayerInfo[playerid][Traids] >1)
+	{
+	    return COLOR_WHITE;
+	}
+	if(PlayerInfo[playerid][Aztec] >1)
+	{
+	    return COLOR_BLUE;
+	}
+	return 0;
+}
+
+public zone111(playerid)
+{
+	takingzone1[playerid] --;
+	new stringgg[128];
+	if(takingzone1[playerid] == 0)
+	{
+	    GangZoneStopFlashForAll(zone1);
+     	if(PlayerInfo[playerid][Aztec] > 1)
+        {
+      		format(stringgg,sizeof(stringgg),"%s has captured Caliguas Casino for Gang Aztec",PlayerName(playerid));
+			SendClientMessage(playerid,0xFFFFFAA,stringgg);
+			takingzone1[playerid] = 0;
+			KillTimer(zone11[playerid]);
+			GangZoneShowForAll(zone1,GetTeamColour(playerid));
+		}
+        if(PlayerInfo[playerid][Groove] > 1)
+        {
+      		format(stringgg,sizeof(stringgg),"%s has captured Caliguas Casino for Gang Groove",PlayerName(playerid));
+			SendClientMessage(playerid,0xFFFFFAA,stringgg);
+			takingzone1[playerid] = 0;
+			KillTimer(zone11[playerid]);
+			GangZoneShowForAll(zone1,GetTeamColour(playerid));
+		}
+        if(PlayerInfo[playerid][Traids] > 1)
+        {
+      		format(stringgg,sizeof(stringgg),"%s has captured Caliguas Casino for Gang Aztec",PlayerName(playerid));
+			SendClientMessage(playerid,0xFFFFFAA,stringgg);
+			takingzone1[playerid] = 0;
+			KillTimer(zone11[playerid]);
+			GangZoneShowForAll(zone1,GetTeamColour(playerid));
+		}
+	}
+}
