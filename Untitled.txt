@@ -4397,7 +4397,7 @@ IRCCMD:slap(botid, channel[], user[], host[], params[])
 	return 1;
 }
 
-IRCCMD:warn(botid, channel[], user[], host[], params[])
+IRCCMD:warn2(botid, channel[], user[], host[], params[])
 {
 	new playerid, reason[64];
 	//Playerid
